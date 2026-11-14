@@ -8,6 +8,12 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- El reproductor usa un WakeLock parcial para que la música no se
+         corte con la pantalla apagada (ExoPlayer setWakeMode local). Sin
+         este permiso, al empezar a sonar la app se cierra con
+         SecurityException. Es un permiso normal: se concede al instalar,
+         sin pedirlo al usuario. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name=".GurruApplication"
