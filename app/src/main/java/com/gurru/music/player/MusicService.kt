@@ -41,10 +41,6 @@ class MusicService : MediaSessionService() {
                 PlayerManager.seekTo(positionMs)
             }
 
-            override fun onStop(session: MediaSession, controller: MediaSession.ControllerInfo) {
-                PlayerManager.stop()
-            }
-
             override fun onCustomCommand(
                 session: MediaSession,
                 controller: MediaSession.ControllerInfo,

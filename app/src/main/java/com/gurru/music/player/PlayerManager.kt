@@ -237,8 +237,8 @@ object PlayerManager {
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
             .setArtist(artist)
-            .setAlbum(album)
-            .apply { artUri?.let { setArtworkUri(Uri.parse(it)) } }
+            .setAlbumTitle(album)
+            .setArtworkUri(artUri?.let { Uri.parse(it) })
             .build()
         return MediaItem.Builder()
             .setUri(audioUri)
