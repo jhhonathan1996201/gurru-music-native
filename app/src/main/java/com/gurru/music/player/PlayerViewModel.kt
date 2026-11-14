@@ -4,7 +4,9 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gurru.music.data.MediaStoreScanner
+import com.gurru.music.data.PlayCountRepository
 import com.gurru.music.data.Track
+import com.gurru.music.data.TrackOrigin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +18,8 @@ import kotlinx.coroutines.launch
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val scanner = MediaStoreScanner(application.applicationContext)
+    private val playCounts = PlayCountRepository(application.applicationContext)
+
 
     val queue = PlayerManager.queue
     val currentTrack = PlayerManager.currentTrack
@@ -39,8 +43,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val query: StateFlow<String> = _query.asStateFlow()
 
     init {
-        if (_hasPermission.value) scanLibrary()
+    if (_hasPermission.value) scanLibrary()
+    // Cada vez que empieza una canción local distinta, suma 1 a su
+    // contador (base de "Mezclas para ti"). El guardado evita contar
+    // dos veces la misma canción si el estado se reemite.
+    viewModelScope.launch {
+        var lastCountedId: String? = null
+        currentTrack.collect { track ->
+            if (track != null && track.origin == TrackOrigin.LOCAL && track.id != lastCountedId) {
+                lastCountedId = track.id
+                playCounts.increment(track.id)
+            }
+        }
     }
+}
+
 
     fun checkPermission() {
         _hasPermission.value = scanner.hasPermission()
