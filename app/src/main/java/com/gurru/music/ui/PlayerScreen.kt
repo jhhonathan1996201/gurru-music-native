@@ -57,10 +57,9 @@ import com.gurru.music.R
 import com.gurru.music.data.Track
 import com.gurru.music.player.PlayerViewModel
 import com.gurru.music.player.RepeatMode
-import com.gurru.music.ui.theme.GurruAccent
 import com.gurru.music.ui.theme.GurruBackground
 import com.gurru.music.ui.theme.GurruRowBackground
-import com.gurru.music.ui.theme.GurruSoft
+import com.gurru.music.ui.theme.LocalGurruTheme
 
 /* Reproductor: portada grande, título, artista, álbum, barra de
    progreso con seek, controles (anterior, play/pausa, siguiente,
@@ -71,6 +70,7 @@ fun PlayerScreen(
     viewModel: PlayerViewModel,
     modifier: Modifier = Modifier
 ) {
+    val theme = LocalGurruTheme.current
     val track by viewModel.currentTrack.collectAsState()
     val queue by viewModel.queue.collectAsState()
     val currentIndex by viewModel.currentIndex.collectAsState()
@@ -142,7 +142,7 @@ fun PlayerScreen(
             text = track?.artist ?: "Sin música todavía",
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = GurruSoft,
+            color = theme.soft,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -163,7 +163,7 @@ fun PlayerScreen(
         Text(
             text = track?.album ?: "",
             fontSize = 13.sp,
-            color = GurruSoft,
+            color = theme.soft,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -176,9 +176,9 @@ fun PlayerScreen(
                 .padding(top = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = formatDuration(positionMs), fontSize = 12.sp, color = GurruSoft)
+            Text(text = formatDuration(positionMs), fontSize = 12.sp, color = theme.soft)
             Spacer(modifier = Modifier.weight(1f))
-            Text(text = formatDuration(durationMs), fontSize = 12.sp, color = GurruSoft)
+            Text(text = formatDuration(durationMs), fontSize = 12.sp, color = theme.soft)
         }
         Slider(
             value = sliderValue ?: progress,
@@ -189,9 +189,9 @@ fun PlayerScreen(
             },
             enabled = track != null,
             colors = SliderDefaults.colors(
-                thumbColor = GurruAccent,
-                activeTrackColor = GurruAccent,
-                inactiveTrackColor = GurruSoft.copy(alpha = 0.3f)
+                thumbColor = theme.accent,
+                activeTrackColor = theme.accent,
+                inactiveTrackColor = theme.soft.copy(alpha = 0.3f)
             ),
             modifier = Modifier.fillMaxWidth()
         )
@@ -206,7 +206,7 @@ fun PlayerScreen(
                 Icon(
                     imageVector = Icons.Default.Shuffle,
                     contentDescription = "Aleatorio",
-                    tint = if (shuffle) GurruAccent else Color.White,
+                    tint = if (shuffle) theme.accent else Color.White,
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -224,7 +224,7 @@ fun PlayerScreen(
                 onClick = { viewModel.togglePlay() },
                 modifier = Modifier
                     .size(72.dp)
-                    .background(GurruAccent, CircleShape)
+                    .background(theme.accent, CircleShape)
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -248,7 +248,7 @@ fun PlayerScreen(
                     Icon(
                         imageVector = if (repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
                         contentDescription = "Repetir",
-                        tint = if (repeatMode == RepeatMode.OFF) Color.White else GurruAccent,
+                        tint = if (repeatMode == RepeatMode.OFF) Color.White else theme.accent,
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -257,7 +257,7 @@ fun PlayerScreen(
                         text = "1",
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = GurruAccent,
+                        color = theme.accent,
                         modifier = Modifier.padding(end = 6.dp, bottom = 4.dp)
                     )
                 }
@@ -283,13 +283,13 @@ fun PlayerScreen(
             Text(
                 text = "  ${queue.size} canciones",
                 fontSize = 12.sp,
-                color = GurruSoft
+                color = theme.soft
             )
             Spacer(modifier = Modifier.weight(1f))
             Icon(
                 imageVector = if (queueExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = if (queueExpanded) "Ocultar cola" else "Mostrar cola",
-                tint = GurruSoft,
+                tint = theme.soft,
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -310,6 +310,7 @@ fun PlayerScreen(
 
 @Composable
 private fun QueueRow(track: Track, number: Int, playing: Boolean, onClick: () -> Unit) {
+    val theme = LocalGurruTheme.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -320,7 +321,7 @@ private fun QueueRow(track: Track, number: Int, playing: Boolean, onClick: () ->
         Text(
             text = number.toString(),
             fontSize = 13.sp,
-            color = if (playing) GurruAccent else GurruSoft,
+            color = if (playing) theme.accent else theme.soft,
             modifier = Modifier.width(28.dp),
             textAlign = TextAlign.Center
         )
@@ -335,7 +336,7 @@ private fun QueueRow(track: Track, number: Int, playing: Boolean, onClick: () ->
                 .clip(RoundedCornerShape(8.dp))
                 .background(GurruRowBackground)
                 .then(
-                    if (playing) Modifier.border(1.5.dp, GurruAccent, RoundedCornerShape(8.dp))
+                    if (playing) Modifier.border(1.5.dp, theme.accent, RoundedCornerShape(8.dp))
                     else Modifier
                 )
         )
@@ -348,14 +349,14 @@ private fun QueueRow(track: Track, number: Int, playing: Boolean, onClick: () ->
                 text = track.title,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (playing) GurruAccent else Color.White,
+                color = if (playing) theme.accent else Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = track.artist,
                 fontSize = 12.sp,
-                color = GurruSoft,
+                color = theme.soft,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

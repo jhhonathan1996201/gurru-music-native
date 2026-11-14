@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -22,17 +23,21 @@ import com.gurru.music.player.PlayerViewModel
 import com.gurru.music.ui.ComingSoonScreen
 import com.gurru.music.ui.LibraryScreen
 import com.gurru.music.ui.PlayerScreen
+import com.gurru.music.ui.SettingsScreen
+import com.gurru.music.ui.SettingsViewModel
 import com.gurru.music.ui.components.BottomBar
 import com.gurru.music.ui.components.BottomSection
 import com.gurru.music.ui.components.MiniPlayer
 import com.gurru.music.ui.theme.GurruBackground
+import com.gurru.music.ui.theme.LocalGurruTheme
 
 /* Gurru Music nativa — Fase 1: Biblioteca local + reproductor.
    Una sola Activity con Navigation Compose. La Biblioteca es la
    pantalla principal; el reproductor se abre al tocar una canción y
    el mini reproductor flotante aparece cuando algo suena (salvo en el
    reproductor mismo). La barra inferior de 5 secciones está siempre
-   visible; las secciones que aún no existen van a "Próximamente". */
+   visible; Ajustes ya tiene su pantalla (temas y créditos) y las
+   demás secciones que aún no existen van a "Próximamente". */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +48,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun GurruApp() {
     val playerViewModel: PlayerViewModel = viewModel()
+    val settingsViewModel: SettingsViewModel = viewModel()
+    val currentTheme by settingsViewModel.theme.collectAsState()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route
@@ -52,16 +59,20 @@ fun GurruApp() {
 
     val selectedSection = when {
         route == "library" || route == "player" -> BottomSection.LIBRARY
+        route == "settings" -> BottomSection.SETTINGS
         route?.startsWith("coming/") == true -> when (backStackEntry?.arguments?.getString("section")) {
             "Descargas" -> BottomSection.DOWNLOADS
             "YouTube" -> BottomSection.YOUTUBE
             "Mezclas" -> BottomSection.MIXES
-            "Ajustes" -> BottomSection.SETTINGS
             else -> BottomSection.LIBRARY
         }
         else -> BottomSection.LIBRARY
     }
 
+    /* El tema de color guardado se provee a toda la app: al cambiarlo
+       en Ajustes, la barra, el mini reproductor y todas las pantallas
+       cambian de color al instante, sin reiniciar. */
+    CompositionLocalProvider(LocalGurruTheme provides currentTheme) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -81,6 +92,9 @@ fun GurruApp() {
                 }
                 composable("player") {
                     PlayerScreen(viewModel = playerViewModel)
+                }
+                composable("settings") {
+                    SettingsScreen(viewModel = settingsViewModel)
                 }
                 composable(
                     "coming/{section}",
@@ -107,6 +121,10 @@ fun GurruApp() {
                             popUpTo("library") { inclusive = false }
                             launchSingleTop = true
                         }
+                        BottomSection.SETTINGS -> navController.navigate("settings") {
+                            popUpTo("library") { inclusive = false }
+                            launchSingleTop = true
+                        }
                         else -> navController.navigate("coming/${section.label}") {
                             popUpTo("library") { inclusive = false }
                             launchSingleTop = true
@@ -115,5 +133,6 @@ fun GurruApp() {
                 }
             )
         }
+    }
     }
 }

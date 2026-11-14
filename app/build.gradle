@@ -74,6 +74,8 @@ dependencies {
     // Audio (Fase 1 en adelante): ExoPlayer + sesión para segundo plano.
     implementation 'androidx.media3:media3-exoplayer:1.4.1'
     implementation 'androidx.media3:media3-session:1.4.1'
+    // Ajustes: guardar el tema de color elegido (DataStore Preferences).
+    implementation 'androidx.datastore:datastore-preferences:1.1.7'
 
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'

@@ -58,11 +58,9 @@ import coil.compose.AsyncImage
 import com.gurru.music.R
 import com.gurru.music.data.Track
 import com.gurru.music.player.PlayerViewModel
-import com.gurru.music.ui.theme.GurruAccent
 import com.gurru.music.ui.theme.GurruBackground
 import com.gurru.music.ui.theme.GurruRowBackground
-import com.gurru.music.ui.theme.GurruSoft
-import com.gurru.music.ui.theme.GurruSoftBlue
+import com.gurru.music.ui.theme.LocalGurruTheme
 
 /* Sub-pestañas de la Biblioteca, igual que en la app actual. En Fase 1
    las listas de reproducción todavía no existen: la pestaña Listas
@@ -85,6 +83,7 @@ fun LibraryScreen(
     onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val theme = LocalGurruTheme.current
     val context = LocalContext.current
     val tracks by viewModel.tracks.collectAsState()
     val scanning by viewModel.scanning.collectAsState()
@@ -145,8 +144,8 @@ fun LibraryScreen(
             TextField(
                 value = query,
                 onValueChange = { viewModel.setQuery(it) },
-                placeholder = { Text("Buscar", color = GurruSoft.copy(alpha = 0.7f)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = GurruSoft) },
+                placeholder = { Text("Buscar", color = theme.soft.copy(alpha = 0.7f)) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = theme.soft) },
                 singleLine = true,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = GurruRowBackground,
@@ -155,7 +154,7 @@ fun LibraryScreen(
                     unfocusedIndicatorColor = Color.Transparent,
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    cursorColor = GurruAccent
+                    cursorColor = theme.accent
                 ),
                 shape = RoundedCornerShape(24.dp),
                 modifier = Modifier
@@ -183,14 +182,14 @@ fun LibraryScreen(
                             text = t.label,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (active) Color.White else GurruSoft,
+                            color = if (active) Color.White else theme.soft,
                             modifier = Modifier.padding(top = 8.dp, bottom = 9.dp)
                         )
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(2.5.dp)
-                                .background(if (active) GurruAccent else Color.Transparent)
+                                .background(if (active) theme.accent else Color.Transparent)
                         )
                     }
                 }
@@ -199,7 +198,7 @@ fun LibraryScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(GurruSoftBlue.copy(alpha = 0.18f))
+                    .background(theme.softBlue.copy(alpha = 0.18f))
             )
         }
 
@@ -212,7 +211,7 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Buscando tu música en el teléfono…", color = GurruSoft, fontSize = 15.sp)
+                    Text("Buscando tu música en el teléfono…", color = theme.soft, fontSize = 15.sp)
                 }
             }
             tracks.isEmpty() -> {
@@ -241,7 +240,7 @@ fun LibraryScreen(
                 ) {
                     Text(
                         "Aún no hay listas",
-                        color = GurruSoft,
+                        color = theme.soft,
                         fontSize = 15.sp
                     )
                 }
@@ -271,6 +270,7 @@ private fun groupBy(tracks: List<Track>, key: (Track) -> String): List<Group> =
 
 @Composable
 private fun PermissionBox(onRequest: () -> Unit) {
+    val theme = LocalGurruTheme.current
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -287,7 +287,7 @@ private fun PermissionBox(onRequest: () -> Unit) {
         Button(
             onClick = onRequest,
             colors = ButtonDefaults.buttonColors(
-                containerColor = GurruAccent,
+                containerColor = theme.accent,
                 contentColor = GurruBackground
             )
         ) {
@@ -324,6 +324,7 @@ private fun TrackList(
    portada. */
 @Composable
 fun TrackRow(track: Track, playing: Boolean, onClick: () -> Unit) {
+    val theme = LocalGurruTheme.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -342,7 +343,7 @@ fun TrackRow(track: Track, playing: Boolean, onClick: () -> Unit) {
                 .clip(RoundedCornerShape(8.dp))
                 .background(GurruRowBackground)
                 .then(
-                    if (playing) Modifier.border(1.5.dp, GurruAccent, RoundedCornerShape(8.dp))
+                    if (playing) Modifier.border(1.5.dp, theme.accent, RoundedCornerShape(8.dp))
                     else Modifier
                 )
         )
@@ -355,14 +356,14 @@ fun TrackRow(track: Track, playing: Boolean, onClick: () -> Unit) {
                 text = track.title,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (playing) GurruAccent else Color.White,
+                color = if (playing) theme.accent else Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = if (track.album.isBlank()) track.artist else "${track.artist} · ${track.album}",
                 fontSize = 12.5.sp,
-                color = GurruSoft,
+                color = theme.soft,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -372,6 +373,7 @@ fun TrackRow(track: Track, playing: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun GroupList(groups: List<Group>, onGroup: (Group) -> Unit) {
+    val theme = LocalGurruTheme.current
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(groups, key = { it.name }) { group ->
             Row(
@@ -408,12 +410,12 @@ private fun GroupList(groups: List<Group>, onGroup: (Group) -> Unit) {
                     Text(
                         text = "${group.tracks.size} canciones",
                         fontSize = 12.5.sp,
-                        color = GurruSoft,
+                        color = theme.soft,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Text(text = "›", fontSize = 18.sp, color = GurruSoft)
+                Text(text = "›", fontSize = 18.sp, color = theme.soft)
             }
         }
     }
@@ -426,6 +428,7 @@ private fun DrillList(
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit
 ) {
+    val theme = LocalGurruTheme.current
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -448,7 +451,7 @@ private fun DrillList(
                 Text(
                     text = "${group.tracks.size} canciones",
                     fontSize = 12.5.sp,
-                    color = GurruSoft
+                    color = theme.soft
                 )
             }
             IconButton(
@@ -458,7 +461,7 @@ private fun DrillList(
                 },
                 modifier = Modifier
                     .size(52.dp)
-                    .background(GurruAccent, CircleShape)
+                    .background(theme.accent, CircleShape)
                     .shadow(16.dp, CircleShape)
             ) {
                 Icon(

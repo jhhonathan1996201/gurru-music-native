@@ -29,9 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.gurru.music.ui.theme.GurruAccent
-import com.gurru.music.ui.theme.GurruSoft
-import com.gurru.music.ui.theme.GurruSoftBlue
+import com.gurru.music.ui.theme.LocalGurruTheme
 import com.gurru.music.ui.theme.gurruPillBrush
 
 /* Las 5 secciones de la barra inferior, igual que en la app actual.
@@ -51,6 +49,7 @@ fun BottomBar(
     onSelect: (BottomSection) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val theme = LocalGurruTheme.current
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -58,7 +57,7 @@ fun BottomBar(
             .shadow(8.dp, RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
             .background(gurruPillBrush())
-            .border(1.dp, GurruSoftBlue.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
+            .border(1.dp, theme.softBlue.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             for (section in BottomSection.entries) {
@@ -75,15 +74,15 @@ fun BottomBar(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(2.dp)
-                            .background(if (active) GurruAccent else Color.Transparent)
+                            .background(if (active) theme.accent else Color.Transparent)
                     )
                     Icon(
                         imageVector = section.icon,
                         contentDescription = section.label,
                         tint = when {
                             section == BottomSection.YOUTUBE -> Color(0xFFFF4D6D)
-                            active -> GurruAccent
-                            else -> GurruSoft.copy(alpha = 0.75f)
+                            active -> theme.accent
+                            else -> theme.soft.copy(alpha = 0.75f)
                         },
                         modifier = Modifier
                             .size(24.dp)
@@ -93,7 +92,7 @@ fun BottomBar(
                         text = section.label,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (active) GurruAccent else GurruSoft.copy(alpha = 0.75f),
+                        color = if (active) theme.accent else theme.soft.copy(alpha = 0.75f),
                         maxLines = 1,
                         modifier = Modifier.padding(top = 3.dp, bottom = 10.dp)
                     )

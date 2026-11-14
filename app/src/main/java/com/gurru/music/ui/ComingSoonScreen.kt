@@ -14,12 +14,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gurru.music.ui.theme.GurruBackground
-import com.gurru.music.ui.theme.GurruSoft
+import com.gurru.music.ui.theme.LocalGurruTheme
 
 /* Marcador de posición para las secciones que llegan en fases
    posteriores (Descargas, YouTube, Mezclas, Ajustes). */
 @Composable
 fun ComingSoonScreen(title: String, modifier: Modifier = Modifier) {
+    val theme = LocalGurruTheme.current
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -35,7 +36,7 @@ fun ComingSoonScreen(title: String, modifier: Modifier = Modifier) {
             )
             Text(
                 text = "Próximamente",
-                color = GurruSoft,
+                color = theme.soft,
                 fontSize = 15.sp,
                 modifier = Modifier.padding(top = 8.dp)
             )

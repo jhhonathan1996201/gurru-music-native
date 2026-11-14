@@ -33,9 +33,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.gurru.music.R
 import com.gurru.music.data.Track
-import com.gurru.music.ui.theme.GurruAccent
-import com.gurru.music.ui.theme.GurruSoft
-import com.gurru.music.ui.theme.GurruSoftBlue
+import com.gurru.music.ui.theme.LocalGurruTheme
 import com.gurru.music.ui.theme.gurruPillBrush
 
 /* Mini reproductor flotante en píldora (encima de la barra inferior),
@@ -50,6 +48,7 @@ fun MiniPlayer(
     onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val theme = LocalGurruTheme.current
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -57,7 +56,7 @@ fun MiniPlayer(
             .shadow(8.dp, RoundedCornerShape(20.dp))
             .clip(RoundedCornerShape(20.dp))
             .background(gurruPillBrush())
-            .border(1.dp, GurruSoftBlue.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
+            .border(1.dp, theme.softBlue.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
             .clickable { onOpenPlayer() }
             .padding(8.dp)
     ) {
@@ -89,7 +88,7 @@ fun MiniPlayer(
                 Text(
                     text = track.artist,
                     fontSize = 12.sp,
-                    color = GurruSoft,
+                    color = theme.soft,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -98,8 +97,8 @@ fun MiniPlayer(
                 onClick = onTogglePlay,
                 modifier = Modifier
                     .size(44.dp)
-                    .background(GurruAccent.copy(alpha = 0.18f), CircleShape)
-                    .border(1.5.dp, GurruSoftBlue.copy(alpha = 0.55f), CircleShape)
+                    .background(theme.accent.copy(alpha = 0.18f), CircleShape)
+                    .border(1.5.dp, theme.softBlue.copy(alpha = 0.55f), CircleShape)
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
