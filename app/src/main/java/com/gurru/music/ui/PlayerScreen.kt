@@ -90,9 +90,12 @@ fun PlayerScreen(
 
     /* "A continuación" empieza escondida, como en la app actual: se
        abre y se cierra tocando el encabezado, y al abrirse salta a la
-       canción que suena para no dejarla a medias fuera de la vista. */
+       canción que suena para no dejarla a medias fuera de la vista.
+       Con la cola oculta el reproductor llena toda la pantalla: la
+       portada crece y el encabezado baja hasta abajo. */
     var queueExpanded by remember { mutableStateOf(false) }
     val queueListState = rememberLazyListState()
+    val coverSize = if (queueExpanded) 260.dp else 320.dp
     LaunchedEffect(queueExpanded, currentIndex) {
         if (queueExpanded && currentIndex >= 0) {
             queueListState.scrollToItem(currentIndex)
@@ -118,7 +121,7 @@ fun PlayerScreen(
                 placeholder = painterResource(R.drawable.logo),
                 error = painterResource(R.drawable.logo),
                 modifier = Modifier
-                    .size(260.dp)
+                    .size(coverSize)
                     .clip(RoundedCornerShape(12.dp))
                     .background(GurruRowBackground)
                     .shadow(12.dp, RoundedCornerShape(12.dp))
@@ -252,6 +255,9 @@ fun PlayerScreen(
             }
         }
 
+        if (!queueExpanded) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()

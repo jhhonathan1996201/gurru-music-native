@@ -90,13 +90,17 @@ object PlayerManager {
             .build()
         player.addListener(listener)
         /* La posición no llega sola: se lee cada medio segundo mientras
-           suena, para mover la barra de progreso. */
+           suena, para mover la barra de progreso. Si leerla fallara por
+           algo, no debe cerrar la app: se ignora y se sigue. */
         scope.launch {
             while (isActive) {
-                if (::player.isInitialized && player.isPlaying) {
-                    _positionMs.value = player.currentPosition.coerceAtLeast(0L)
-                    val d = player.duration
-                    if (d != C.TIME_UNSET) _durationMs.value = d.coerceAtLeast(0L)
+                try {
+                    if (::player.isInitialized && player.isPlaying) {
+                        _positionMs.value = player.currentPosition.coerceAtLeast(0L)
+                        val d = player.duration
+                        if (d != C.TIME_UNSET) _durationMs.value = d.coerceAtLeast(0L)
+                    }
+                } catch (_: Exception) {
                 }
                 delay(500)
             }
