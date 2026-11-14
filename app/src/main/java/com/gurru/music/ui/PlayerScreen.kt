@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -95,7 +96,6 @@ fun PlayerScreen(
        portada crece y el encabezado baja hasta abajo. */
     var queueExpanded by remember { mutableStateOf(false) }
     val queueListState = rememberLazyListState()
-    val coverSize = if (queueExpanded) 260.dp else 320.dp
     LaunchedEffect(queueExpanded, currentIndex) {
         if (queueExpanded && currentIndex >= 0) {
             queueListState.scrollToItem(currentIndex)
@@ -108,12 +108,12 @@ fun PlayerScreen(
             .background(GurruBackground)
             .padding(horizontal = 20.dp)
     ) {
-        /* Con la cola oculta el reproductor llena toda la pantalla: un
-           espacio arriba y otro abajo centran la portada y los
-           controles, para que no queden pegados arriba con el hueco
-           en medio. */
+        /* Con la cola oculta el reproductor llena toda la pantalla: la
+           portada crece a todo lo ancho y los espacios arriba y abajo
+           centran la portada y los controles, para que no queden
+           pegados arriba con el hueco en medio. */
         if (!queueExpanded) {
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.weight(0.6f))
         }
         Box(
             modifier = Modifier
@@ -128,7 +128,10 @@ fun PlayerScreen(
                 placeholder = painterResource(R.drawable.logo),
                 error = painterResource(R.drawable.logo),
                 modifier = Modifier
-                    .size(coverSize)
+                    .then(
+                        if (queueExpanded) Modifier.size(260.dp)
+                        else Modifier.fillMaxWidth().aspectRatio(1f)
+                    )
                     .clip(RoundedCornerShape(12.dp))
                     .background(GurruRowBackground)
                     .shadow(12.dp, RoundedCornerShape(12.dp))
@@ -222,7 +225,6 @@ fun PlayerScreen(
                 modifier = Modifier
                     .size(72.dp)
                     .background(GurruAccent, CircleShape)
-                    .shadow(16.dp, CircleShape)
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
