@@ -24,7 +24,7 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.gurru.music'
+        applicationId 'com.gurru.music.native'
         minSdk 24
         targetSdk 35
         versionCode = gurruVersionCode
