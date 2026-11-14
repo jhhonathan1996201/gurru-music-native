@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Fase 1: leer la música del teléfono (audio en Android 13+,
+         almacenamiento en Android 12 o menos) y servicio en primer
+         plano para que la música siga sonando fuera de la app. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
     <application
+        android:name=".GurruApplication"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -17,6 +26,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Servicio de reproducción en segundo plano (Media3): la
+             sesión publica la notificación con controles y mantiene la
+             música sonando con la pantalla apagada o fuera de la app. -->
+        <service
+            android:name=".player.MusicService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>
