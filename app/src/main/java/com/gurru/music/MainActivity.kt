@@ -22,6 +22,7 @@ import androidx.navigation.navArgument
 import com.gurru.music.player.PlayerViewModel
 import com.gurru.music.ui.ComingSoonScreen
 import com.gurru.music.ui.LibraryScreen
+import com.gurru.music.ui.MixesScreen
 import com.gurru.music.ui.PlayerScreen
 import com.gurru.music.ui.SettingsScreen
 import com.gurru.music.ui.SettingsViewModel
@@ -60,6 +61,8 @@ fun GurruApp() {
     val selectedSection = when {
         route == "library" || route == "player" -> BottomSection.LIBRARY
         route == "settings" -> BottomSection.SETTINGS
+        route == "mixes" -> BottomSection.MIXES
+
         route?.startsWith("coming/") == true -> when (backStackEntry?.arguments?.getString("section")) {
             "Descargas" -> BottomSection.DOWNLOADS
             "YouTube" -> BottomSection.YOUTUBE
@@ -92,9 +95,15 @@ fun GurruApp() {
                 }
                 composable("player") {
                     PlayerScreen(viewModel = playerViewModel)
-                }
-                composable("settings") {
+                }composable("settings") {
                     SettingsScreen(viewModel = settingsViewModel)
+}
+composable("mixes") {
+    MixesScreen(
+        viewModel = playerViewModel,
+        onOpenPlayer = { navController.navigate("player") }
+    )
+}
                 }
                 composable(
                     "coming/{section}",
@@ -121,9 +130,16 @@ fun GurruApp() {
                             popUpTo("library") { inclusive = false }
                             launchSingleTop = true
                         }
-                        BottomSection.SETTINGS -> navController.navigate("settings") {
-                            popUpTo("library") { inclusive = false }
-                            launchSingleTop = true
+                       BottomSection.SETTINGS -> navController.navigate("settings") {
+    popUpTo("library") { inclusive = false }
+    launchSingleTop = true
+}
+BottomSection.MIXES -> navController.navigate("mixes") {
+    popUpTo("library") { inclusive = false }
+    launchSingleTop = true
+}
+else -> navController.navigate("coming/${section.label}") {
+
                         }
                         else -> navController.navigate("coming/${section.label}") {
                             popUpTo("library") { inclusive = false }
