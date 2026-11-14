@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
@@ -30,11 +32,13 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,7 +82,22 @@ fun PlayerScreen(
     /* Posición del dedo mientras se arrastra la barra, para que la
        posición del reproductor no pelee con el arrastre. */
     var sliderValue by remember { mutableStateOf<Float?>(null) }
-    val progress = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f
+    /* La barra va de 0 a 1: se limita por si la duración que trae el
+       archivo es más corta que la real y la posición la rebasara, que
+       es lo que antes podía cerrar la app al cambiar de canción. */
+    val progress = (if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f)
+        .coerceIn(0f, 1f)
+
+    /* "A continuación" empieza escondida, como en la app actual: se
+       abre y se cierra tocando el encabezado, y al abrirse salta a la
+       canción que suena para no dejarla a medias fuera de la vista. */
+    var queueExpanded by remember { mutableStateOf(false) }
+    val queueListState = rememberLazyListState()
+    LaunchedEffect(queueExpanded, currentIndex) {
+        if (queueExpanded && currentIndex >= 0) {
+            queueListState.scrollToItem(currentIndex)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -233,27 +252,42 @@ fun PlayerScreen(
             }
         }
 
-        Text(
-            text = "A continuación",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.padding(top = 20.dp)
-        )
-        Text(
-            text = "${queue.size} canciones",
-            fontSize = 12.sp,
-            color = GurruSoft,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            itemsIndexed(queue, key = { _, t -> t.id }) { idx, t ->
-                QueueRow(
-                    track = t,
-                    number = idx + 1,
-                    playing = idx == currentIndex,
-                    onClick = { viewModel.playAt(idx) }
-                )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { queueExpanded = !queueExpanded }
+                .padding(top = 20.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "A continuación",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = "  ${queue.size} canciones",
+                fontSize = 12.sp,
+                color = GurruSoft
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Icon(
+                imageVector = if (queueExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (queueExpanded) "Ocultar cola" else "Mostrar cola",
+                tint = GurruSoft,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+        if (queueExpanded) {
+            LazyColumn(state = queueListState, modifier = Modifier.weight(1f)) {
+                itemsIndexed(queue, key = { _, t -> t.id }) { idx, t ->
+                    QueueRow(
+                        track = t,
+                        number = idx + 1,
+                        playing = idx == currentIndex,
+                        onClick = { viewModel.playAt(idx) }
+                    )
+                }
             }
         }
     }

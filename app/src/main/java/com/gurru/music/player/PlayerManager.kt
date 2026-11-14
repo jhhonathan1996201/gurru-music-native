@@ -213,6 +213,7 @@ object PlayerManager {
             appContext.stopService(Intent(appContext, MusicService::class.java))
         } catch (_: Exception) {
         }
+        serviceStarted = false
     }
 
     private fun onTrackEnded() {
@@ -225,10 +226,16 @@ object PlayerManager {
     }
 
     /* El servicio en primer plano es lo que mantiene la música sonando
-       fuera de la app; se arranca al empezar a sonar. */
+       fuera de la app; se arranca una sola vez al empezar a sonar, no
+       en cada cambio de canción (arrancarlo de nuevo en segundo plano
+       es lo que podía cerrar la app al saltar canciones). */
+    private var serviceStarted = false
+
     private fun startServiceIfNeeded() {
+        if (serviceStarted) return
         try {
             appContext.startForegroundService(Intent(appContext, MusicService::class.java))
+            serviceStarted = true
         } catch (_: Exception) {
         }
     }
