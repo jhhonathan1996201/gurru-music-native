@@ -1,6 +1,7 @@
 package com.gurru.music.player
 
 import android.os.Bundle
+import androidx.media3.common.Player
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -25,20 +26,43 @@ class MusicService : MediaSessionService() {
         super.onCreate()
         PlayerManager.init(applicationContext)
         val callback = object : MediaSession.Callback {
-            override fun onSkipToNext(session: MediaSession, controller: MediaSession.ControllerInfo) {
-                PlayerManager.next()
-            }
-
-            override fun onSkipToPrevious(session: MediaSession, controller: MediaSession.ControllerInfo) {
-                PlayerManager.prev()
-            }
-
-            override fun onSeekTo(
+            /* En Media3 1.4.1 el Callback NO tiene onSkipToNext /
+               onSkipToPrevious / onSeekTo / onStop: todos los comandos
+               del reproductor llegan por onPlayerCommandRequest. Si se
+               devuelve algo distinto de RESULT_SUCCESS, la sesión NO
+               ejecuta el comando en el reproductor (verificado en el
+               código fuente de media3-session 1.4.1: MediaSessionStub,
+               "Don't run rejected command"). Por eso los comandos de
+               siguiente/anterior/play-pausa/detener se delegan a
+               PlayerManager (aleatorio, repetir, reinicio de 3 s) y se
+               devuelve RESULT_INFO_SKIPPED; el resto (buscar/seek, que
+               la sesión ejecuta sola en el reproductor compartido con
+               la posición que trae el comando) devuelve SUCCESS. */
+            @Suppress("DEPRECATION")
+            override fun onPlayerCommandRequest(
                 session: MediaSession,
                 controller: MediaSession.ControllerInfo,
-                positionMs: Long
-            ) {
-                PlayerManager.seekTo(positionMs)
+                @Player.Command playerCommand: Int
+            ): Int {
+                when (playerCommand) {
+                    Player.COMMAND_PLAY_PAUSE -> {
+                        PlayerManager.togglePlay()
+                        return SessionResult.RESULT_INFO_SKIPPED
+                    }
+                    Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> {
+                        PlayerManager.next()
+                        return SessionResult.RESULT_INFO_SKIPPED
+                    }
+                    Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> {
+                        PlayerManager.prev()
+                        return SessionResult.RESULT_INFO_SKIPPED
+                    }
+                    Player.COMMAND_STOP -> {
+                        PlayerManager.stop()
+                        return SessionResult.RESULT_INFO_SKIPPED
+                    }
+                    else -> return SessionResult.RESULT_SUCCESS
+                }
             }
 
             override fun onCustomCommand(
