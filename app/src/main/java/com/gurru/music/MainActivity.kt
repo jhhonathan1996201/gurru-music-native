@@ -95,15 +95,16 @@ fun GurruApp() {
                 }
                 composable("player") {
                     PlayerScreen(viewModel = playerViewModel)
-                }composable("settings") {
+                }
+                composable("settings") {
                     SettingsScreen(viewModel = settingsViewModel)
-}
-composable("mixes") {
-    MixesScreen(
-        viewModel = playerViewModel,
-        onOpenPlayer = { navController.navigate("player") }
-    )
-}
+                }
+                composable("mixes") {
+                    MixesScreen(
+                        viewModel = playerViewModel,
+                        onOpenPlayer = { navController.navigate("player") }
+                    )
+                }
                 composable(
                     "coming/{section}",
                     arguments = listOf(navArgument("section") { type = NavType.StringType })
