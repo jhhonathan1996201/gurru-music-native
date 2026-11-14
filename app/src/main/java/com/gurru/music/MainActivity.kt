@@ -104,7 +104,6 @@ composable("mixes") {
         onOpenPlayer = { navController.navigate("player") }
     )
 }
-                }
                 composable(
                     "coming/{section}",
                     arguments = listOf(navArgument("section") { type = NavType.StringType })
@@ -138,9 +137,6 @@ BottomSection.MIXES -> navController.navigate("mixes") {
     popUpTo("library") { inclusive = false }
     launchSingleTop = true
 }
-else -> navController.navigate("coming/${section.label}") {
-
-                        }
                         else -> navController.navigate("coming/${section.label}") {
                             popUpTo("library") { inclusive = false }
                             launchSingleTop = true
