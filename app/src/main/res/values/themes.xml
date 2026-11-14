@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema oscuro de Gurru Music (Fase 0). Sin ActionBar: la interfaz la
+         dibuja Jetpack Compose, no la barra de Android. -->
+    <style name="Theme.GurruMusic" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/gurru_background</item>
+        <item name="android:statusBarColor">@color/gurru_background</item>
+        <item name="android:navigationBarColor">@color/gurru_background</item>
+    </style>
+</resources>

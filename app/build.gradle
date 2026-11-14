@@ -1,0 +1,75 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+/* Número de versión: el número de corrida de GitHub Actions, para que
+   cada APK sea una actualización de la anterior. Se calcula AQUÍ, fuera
+   del bloque android, con asignación directa (versionCode =) en vez de la
+   forma corta de Gradle, porque la expresión con getenv dentro de
+   defaultConfig hacía fallar la evaluación del proyecto en la app
+   Capacitor ("Value is null" en su corrida #36). Sin número de corrida
+   (build local), queda versionCode 1 / versionName 1.0. */
+def gurruRunNumber = System.getenv("GITHUB_RUN_NUMBER")
+def gurruVersionCode = 1
+def gurruVersionName = "1.0"
+if (gurruRunNumber != null && (gurruRunNumber ==~ /\d+/)) {
+    gurruVersionCode = gurruRunNumber.toInteger()
+    gurruVersionName = "1.0." + gurruRunNumber
+}
+
+android {
+    namespace 'com.gurru.music'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.gurru.music'
+        minSdk 24
+        targetSdk 35
+        versionCode = gurruVersionCode
+        versionName = gurruVersionName
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        compose true
+    }
+}
+
+dependencies {
+    def composeBom = platform('androidx.compose:compose-bom:2024.09.00')
+    implementation composeBom
+    androidTestImplementation composeBom
+
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.activity:activity-compose:1.9.2'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    // Navegación entre las 7 pantallas (Fase 1 en adelante).
+    implementation 'androidx.navigation:navigation-compose:2.8.0'
+    // Audio (Fase 1 en adelante): ExoPlayer + sesión para segundo plano.
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
+    implementation 'androidx.media3:media3-session:1.4.1'
+
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
+}

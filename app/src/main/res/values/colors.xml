@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fondo azul oscuro de Gurru Music (el mismo de la app actual y del
+         fondo del icono de lanzamiento). -->
+    <color name="gurru_background">#04163C</color>
+    <!-- Acento cian por defecto (tema "azul" de la app actual). -->
+    <color name="gurru_accent">#22D3EE</color>
+    <color name="gurru_accent2">#0284C7</color>
+    <color name="gurru_soft">#BAE6FD</color>
+</resources>
