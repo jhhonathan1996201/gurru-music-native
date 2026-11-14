@@ -108,6 +108,13 @@ fun PlayerScreen(
             .background(GurruBackground)
             .padding(horizontal = 20.dp)
     ) {
+        /* Con la cola oculta el reproductor llena toda la pantalla: un
+           espacio arriba y otro abajo centran la portada y los
+           controles, para que no queden pegados arriba con el hueco
+           en medio. */
+        if (!queueExpanded) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()

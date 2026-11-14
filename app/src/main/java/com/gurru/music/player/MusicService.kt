@@ -77,12 +77,13 @@ class MusicService : MediaSessionService() {
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
         }
-        session = MediaSession.Builder(this, PlayerManager.player)
+        val builtSession = MediaSession.Builder(this, PlayerManager.player)
             .setCallback(callback)
             .build()
+        session = builtSession
         /* Botón "Detener" en la notificación (la MediaSession de
            Media3 ya trae anterior / play-pausa / siguiente). */
-        session?.setCustomLayout(
+        builtSession.setCustomLayout(
             listOf(
                 CommandButton.Builder()
                     .setDisplayName("Detener")
@@ -91,6 +92,14 @@ class MusicService : MediaSessionService() {
                     .build()
             )
         )
+        /* Registrar la sesión en el servicio nada más crearla: sin
+           esto el gestor de notificaciones no arranca, nunca se llama
+           a startForeground() y el sistema cierra la app a los ~28 s
+           con ForegroundServiceDidNotStartInTimeException (así lo
+           mostró el registro de fallos del 13-nov-2026 23:30). Con la
+           sesión registrada, la notificación aparece y el servicio
+           pasa a primer plano en cuanto suena la música. */
+        addSession(builtSession)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
