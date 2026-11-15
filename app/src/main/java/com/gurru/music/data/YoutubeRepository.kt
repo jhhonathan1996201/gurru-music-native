@@ -299,8 +299,10 @@ object YoutubeRepository {
                 audioCandidates.add(AudioCandidate(directUrl, bitrate, itag, mime))
             }
 
-            // Preferir itag 140 (AAC 128kbps) o el de mayor bitrate
-            val best = audioCandidates.firstOrNull { it.itag == 140 }
+            // Preferir la mayor calidad AAC (M4A): itag 141 (AAC 256kbps),
+            // luego itag 140 (AAC 128kbps); si no hay ninguno, el de mayor bitrate
+            val best = audioCandidates.firstOrNull { it.itag == 141 }
+                ?: audioCandidates.firstOrNull { it.itag == 140 }
                 ?: audioCandidates.maxByOrNull { it.bitrate }
 
             if (best != null) return best.url

@@ -161,9 +161,16 @@ object DownloadRepository {
             updateTask(task.videoId) { it.copy(status = DownloadStatus.PREPARING) }
             val streamUrl = YoutubeRepository.getStreamUrl(task.videoId)
 
+            // ratebypass=yes le pide al servidor de YouTube que NO limite
+            // la velocidad de descarga (sin esto, el servidor la reduce y
+            // la descarga tarda mucho más que la reproducción, que solo
+            // necesita velocidad de tiempo real)
+            val downloadUrl = if (streamUrl.contains("ratebypass=")) streamUrl
+            else streamUrl + if (streamUrl.contains("?")) "&ratebypass=yes" else "?ratebypass=yes"
+
             // 2. Conectar al stream
             updateTask(task.videoId) { it.copy(status = DownloadStatus.DOWNLOADING) }
-            val url = URL(streamUrl)
+            val url = URL(downloadUrl)
             val conn = url.openConnection() as HttpURLConnection
             conn.connectTimeout = 15_000
             conn.readTimeout    = 20_000
