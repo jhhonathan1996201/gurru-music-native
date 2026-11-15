@@ -1,5 +1,13 @@
 package com.gurru.music.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -184,7 +192,8 @@ fun PlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 6.dp),
+                .padding(top = 6.dp)
+                .animateContentSize(),
             contentAlignment = Alignment.Center
         ) {
             val viewModifier = Modifier
@@ -203,17 +212,28 @@ fun PlayerScreen(
                     modifier   = viewModifier
                 )
             } else {
-                AsyncImage(
-                    model = track?.artUri ?: R.drawable.logo,
-                    contentDescription = "Portada",
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(R.drawable.logo),
-                    error = painterResource(R.drawable.logo),
+                AnimatedContent(
+                    targetState = track?.id,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = tween(350)) + scaleIn(initialScale = 0.96f, animationSpec = tween(350))) togetherWith
+                            (fadeOut(animationSpec = tween(200)) + scaleOut(targetScale = 0.96f, animationSpec = tween(200)))
+                    },
+                    label = "portada",
                     modifier = viewModifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(GurruRowBackground)
-                        .shadow(12.dp, RoundedCornerShape(12.dp))
-                )
+                ) { _ ->
+                    AsyncImage(
+                        model = track?.artUri ?: R.drawable.logo,
+                        contentDescription = "Portada",
+                        contentScale = ContentScale.Crop,
+                        placeholder = painterResource(R.drawable.logo),
+                        error = painterResource(R.drawable.logo),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(GurruRowBackground)
+                            .shadow(12.dp, RoundedCornerShape(12.dp))
+                    )
+                }
             }
         }
 
@@ -231,7 +251,7 @@ fun PlayerScreen(
         )
         Text(
             text = track?.title ?: "Elige una canción",
-            fontSize = 20.sp,
+            fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
             maxLines = 1,
@@ -393,8 +413,10 @@ private fun QueueRow(track: Track, number: Int, playing: Boolean, onClick: () ->
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (playing) theme.accent.copy(alpha = 0.12f) else Color.Transparent)
             .clickable { onClick() }
-            .padding(vertical = 5.dp),
+            .padding(vertical = 5.dp, horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
