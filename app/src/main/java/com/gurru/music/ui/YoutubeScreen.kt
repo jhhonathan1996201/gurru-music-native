@@ -105,7 +105,7 @@ fun YoutubeScreen(
                     value = query,
                     onValueChange = { viewModel.setQuery(it) },
                     placeholder = {
-                        Text("Buscar en YouTube", color = theme.soft.copy(alpha = 0.7f))
+                        Text("Buscar en YouTube", color = Color.White.copy(alpha = 0.6f))
                     },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),

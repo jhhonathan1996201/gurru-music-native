@@ -70,7 +70,12 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
 
     // ── Búsqueda ───────────────────────────────────────────────────────────────
 
-    fun setQuery(q: String) { _query.value = q }
+    fun setQuery(q: String) {
+        _query.value = q
+        // Si se borra el texto, también se borran los resultados para que
+        // no queden resultados viejos con el buscador vacío
+        if (q.isBlank()) _results.value = emptyList()
+    }
 
     fun search() {
         val q = _query.value.trim()
