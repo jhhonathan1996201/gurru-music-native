@@ -47,8 +47,12 @@ object DownloadRepository {
     private val activeJobs = ConcurrentHashMap<String, Job>()
     private val KEY_DOWNLOADS_HISTORY = stringPreferencesKey("completed_downloads_history")
 
+    // El User-Agent debe coincidir con el cliente que obtuvo la URL del
+    // stream (VISIONOS / Safari), no con Chrome de escritorio: si YouTube
+    // ve un UA distinto al del cliente que pidió el audio, puede limitar
+    // la velocidad de descarga (los ~33 KB/s que se ven en pantalla).
     private const val USER_AGENT =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
 
     fun init(context: Context) {
         if (::appCtx.isInitialized) return
@@ -175,6 +179,7 @@ object DownloadRepository {
             conn.connectTimeout = 15_000
             conn.readTimeout    = 20_000
             conn.setRequestProperty("User-Agent", USER_AGENT)
+            conn.setRequestProperty("Referer", "https://www.youtube.com/")
             conn.setRequestProperty("Accept", "*/*")
             conn.setRequestProperty("Connection", "keep-alive")
             conn.setRequestProperty("Accept-Encoding", "identity")
