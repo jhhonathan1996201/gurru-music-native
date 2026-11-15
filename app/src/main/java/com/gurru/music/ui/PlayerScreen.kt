@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -54,7 +57,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.gurru.music.data.DownloadStatus
 import com.gurru.music.data.LyricsData
+import com.gurru.music.data.TrackOrigin
+import com.gurru.music.data.YoutubeSearchResult
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,6 +89,7 @@ import com.gurru.music.ui.theme.LocalGurruTheme
 @Composable
 fun PlayerScreen(
     viewModel: PlayerViewModel,
+    downloadsViewModel: DownloadsViewModel? = null,
     modifier: Modifier = Modifier
 ) {
     val theme = LocalGurruTheme.current
@@ -98,6 +105,16 @@ fun PlayerScreen(
     val lyricsData by viewModel.lyricsData.collectAsState()
     val loadingLyrics by viewModel.loadingLyrics.collectAsState()
     var showLyrics by remember { mutableStateOf(false) }
+
+    /* Descarga de la canción que suena (solo online): se observa la lista
+       de descargas para mostrar Descargar / % / Descargada. */
+    val downloads by downloadsViewModel?.downloads?.collectAsState() ?: remember { mutableStateOf(emptyList()) }
+    val isOnline = track?.origin == TrackOrigin.YOUTUBE && track?.youtubeId != null
+    val currentDownload = remember(downloads, track?.youtubeId) {
+        downloads.firstOrNull { it.videoId == track?.youtubeId }
+    }
+    val isDownloaded = currentDownload?.status == DownloadStatus.COMPLETED
+    val downloadProgress = if (currentDownload?.status == DownloadStatus.DOWNLOADING || currentDownload?.status == DownloadStatus.PREPARING) currentDownload?.progress else null
 
     /* Posición del dedo mientras se arrastra la barra, para que la
        posición del reproductor no pelee con el arrastre. */
@@ -134,61 +151,6 @@ fun PlayerScreen(
         if (!queueExpanded) {
             Spacer(modifier = Modifier.weight(0.6f))
         }
-        // ── Barra superior: fuente de la letra + botón toggle Letras / Carátula ─
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (showLyrics && lyricsData != null) {
-                Text(
-                    text = "Fuente: ${lyricsData?.source}",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = theme.accent,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(theme.accent.copy(alpha = 0.15f))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            } else {
-                Spacer(modifier = Modifier.width(1.dp))
-            }
-
-            // Botón de alternancia Letras / Carátula
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (showLyrics) theme.accent else GurruRowBackground)
-                    .clickable {
-                        showLyrics = !showLyrics
-                        if (showLyrics && lyricsData == null) {
-                            viewModel.loadLyricsForCurrentTrack()
-                        }
-                    }
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = if (showLyrics) Icons.Default.Image else Icons.Default.Mic,
-                    contentDescription = if (showLyrics) "Ver Carátula" else "Ver Letras",
-                    tint = if (showLyrics) GurruBackground else theme.accent,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (showLyrics) "Carátula" else "Letras",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (showLyrics) GurruBackground else Color.White
-                )
-            }
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -292,8 +254,182 @@ fun PlayerScreen(
                 activeTrackColor = theme.accent,
                 inactiveTrackColor = theme.soft.copy(alpha = 0.3f)
             ),
+            /* Bolita: el pulgar es un círculo sólido del color del tema,
+               como en la app anterior; antes era una rayita vertical. */
+            thumb = {
+                Box(
+                    modifier = Modifier
+                        .size(20.dp)
+                        .background(theme.accent, CircleShape)
+                )
+            },
+            /* Pista limpia: rectángulo redondeado sin punto al final. */
+            track = {
+                val fraction = (sliderValue ?: progress).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(theme.soft.copy(alpha = 0.3f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .background(theme.accent)
+                    )
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
+
+        /* ── Acciones: Letras / Carátula + Descargar (online) ──
+           El botón de letra está aquí, junto a los controles, para que
+           se alcance fácil con el pulgar; antes estaba arriba, chico.
+           El de descarga solo aparece cuando la canción es de YouTube. */
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Botón Letras / Carátula
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (showLyrics) theme.accent else GurruRowBackground)
+                    .clickable {
+                        showLyrics = !showLyrics
+                        if (showLyrics && lyricsData == null) {
+                            viewModel.loadLyricsForCurrentTrack()
+                        }
+                    }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (showLyrics) Icons.Default.Image else Icons.Default.Mic,
+                    contentDescription = if (showLyrics) "Ver Carátula" else "Ver Letras",
+                    tint = if (showLyrics) GurruBackground else theme.accent,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (showLyrics) "Carátula" else "Letras",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (showLyrics) GurruBackground else Color.White
+                )
+            }
+
+            // Botón Descargar (solo canciones online de YouTube)
+            if (isOnline) {
+                Spacer(modifier = Modifier.width(10.dp))
+                when {
+                    downloadProgress != null -> {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(GurruRowBackground)
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
+                                color = theme.accent,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Descargando $downloadProgress%",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                    isDownloaded -> {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(GurruRowBackground)
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Descargada",
+                                tint = Color(0xFF00E676),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Descargada",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                    else -> {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(GurruRowBackground)
+                                .clickable {
+                                    val t = track
+                                    val vid = t?.youtubeId
+                                    if (t != null && vid != null) {
+                                        downloadsViewModel?.startDownload(
+                                            YoutubeSearchResult(
+                                                videoId = vid,
+                                                title = t.title,
+                                                artist = t.artist,
+                                                durationSec = t.durationSec,
+                                                thumbnailUrl = t.artUri
+                                            )
+                                        )
+                                    }
+                                }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Descargar",
+                                tint = theme.accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Descargar",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        // Fuente de la letra, chica y centrada bajo los botones
+        if (showLyrics && lyricsData != null) {
+            Text(
+                text = "Fuente: ${lyricsData?.source}",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = theme.accent,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+            )
+        }
 
         Row(
             modifier = Modifier
