@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -86,6 +87,7 @@ import com.gurru.music.ui.theme.LocalGurruTheme
    progreso con seek, controles (anterior, play/pausa, siguiente,
    aleatorio, repetir) y la cola "A continuación" con la canción que
    suena marcada; tocar una de la cola salta a ella. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     viewModel: PlayerViewModel,
