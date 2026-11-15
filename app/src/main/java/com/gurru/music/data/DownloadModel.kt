@@ -20,6 +20,7 @@ data class DownloadTask(
     val progress: Int = 0,             // 0..100 %
     val bytesDownloaded: Long = 0L,
     val totalBytes: Long = 0L,
+    val speedBytesPerSec: Long = 0L, // velocidad actual de descarga (para diagnóstico)
     val status: DownloadStatus = DownloadStatus.QUEUED,
     val localUri: String? = null,      // content:// o file://
     val localPath: String? = null,

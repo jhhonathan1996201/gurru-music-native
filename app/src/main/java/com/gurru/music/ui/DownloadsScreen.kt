@@ -229,7 +229,14 @@ private fun ActiveDownloadRow(
 
             val statusText = when (task.status) {
                 DownloadStatus.PREPARING -> "Preparando audio…"
-                DownloadStatus.DOWNLOADING -> "Descargando: ${task.progress}%"
+                DownloadStatus.DOWNLOADING -> {
+                    val speedText = if (task.speedBytesPerSec >= 1024 * 1024) {
+                        "%.1f MB/s".format(task.speedBytesPerSec / 1024.0 / 1024.0)
+                    } else {
+                        "${task.speedBytesPerSec / 1024} KB/s"
+                    }
+                    "Descargando: ${task.progress}% · $speedText"
+                }
                 else -> "En cola…"
             }
 

@@ -208,6 +208,7 @@ object DownloadRepository {
             var downloadedBytes = 0L
             var lastReportedProgress = -1
             var lastReportTime = 0L
+            val downloadStartMs = System.currentTimeMillis()
 
             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                 outputStream.write(buffer, 0, bytesRead)
@@ -219,11 +220,16 @@ object DownloadRepository {
                 if ((currentProgress >= lastReportedProgress + 2 && now - lastReportTime > 250) || currentProgress == 100) {
                     lastReportedProgress = currentProgress
                     lastReportTime = now
+                    // Velocidad media desde que empezó la descarga (para ver
+                    // en pantalla si YouTube la está limitando)
+                    val elapsedSec = ((now - downloadStartMs) / 1000.0).coerceAtLeast(0.5)
+                    val speed = (downloadedBytes / elapsedSec).toLong()
                     updateTask(task.videoId) {
                         it.copy(
                             progress = currentProgress,
                             bytesDownloaded = downloadedBytes,
-                            totalBytes = totalBytes
+                            totalBytes = totalBytes,
+                            speedBytesPerSec = speed
                         )
                     }
                 }
