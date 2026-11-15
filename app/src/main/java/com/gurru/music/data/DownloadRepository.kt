@@ -168,6 +168,9 @@ object DownloadRepository {
             conn.connectTimeout = 15_000
             conn.readTimeout    = 20_000
             conn.setRequestProperty("User-Agent", USER_AGENT)
+            conn.setRequestProperty("Accept", "*/*")
+            conn.setRequestProperty("Connection", "keep-alive")
+            conn.setRequestProperty("Accept-Encoding", "identity")
             conn.instanceFollowRedirects = true
 
             val code = conn.responseCode
@@ -192,8 +195,8 @@ object DownloadRepository {
                 throw Exception("No se pudo crear el archivo en el almacenamiento del teléfono")
             }
 
-            // 4. Copiar bytes con reporte de progreso
-            val buffer = ByteArray(16 * 1024)
+            // 4. Copiar bytes con buffer ampliado de 64KB y reporte eficiente
+            val buffer = ByteArray(64 * 1024)
             var bytesRead: Int
             var downloadedBytes = 0L
             var lastReportedProgress = -1
@@ -206,7 +209,7 @@ object DownloadRepository {
                 val currentProgress = ((downloadedBytes * 100) / totalBytes).toInt().coerceIn(0, 100)
                 val now = System.currentTimeMillis()
 
-                if (currentProgress != lastReportedProgress && (now - lastReportTime > 150 || currentProgress == 100)) {
+                if ((currentProgress >= lastReportedProgress + 2 && now - lastReportTime > 250) || currentProgress == 100) {
                     lastReportedProgress = currentProgress
                     lastReportTime = now
                     updateTask(task.videoId) {

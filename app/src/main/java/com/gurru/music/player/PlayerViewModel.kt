@@ -3,6 +3,8 @@ package com.gurru.music.player
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.gurru.music.data.LyricsData
+import com.gurru.music.data.LyricsRepository
 import com.gurru.music.data.MediaStoreScanner
 import com.gurru.music.data.PlayCountRepository
 import com.gurru.music.data.Track
@@ -42,21 +44,54 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    // ── Letras de canciones (multi-fuente y sincronizadas) ─────────────────────
+    private val _lyricsData = MutableStateFlow<LyricsData?>(null)
+    val lyricsData: StateFlow<LyricsData?> = _lyricsData.asStateFlow()
+
+    private val _loadingLyrics = MutableStateFlow(false)
+    val loadingLyrics: StateFlow<Boolean> = _loadingLyrics.asStateFlow()
+
+    private var currentLyricsTrackId: String? = null
+
     init {
-    if (_hasPermission.value) scanLibrary()
-    // Cada vez que empieza una canción local distinta, suma 1 a su
-    // contador (base de "Mezclas para ti"). El guardado evita contar
-    // dos veces la misma canción si el estado se reemite.
-    viewModelScope.launch {
-        var lastCountedId: String? = null
-        currentTrack.collect { track ->
-            if (track != null && track.origin == TrackOrigin.LOCAL && track.id != lastCountedId) {
-                lastCountedId = track.id
-                playCounts.increment(track.id)
+        if (_hasPermission.value) scanLibrary()
+        // Cada vez que empieza una canción local distinta, suma 1 a su
+        // contador (base de "Mezclas para ti"). El guardado evita contar
+        // dos veces la misma canción si el estado se reemite.
+        viewModelScope.launch {
+            var lastCountedId: String? = null
+            currentTrack.collect { track ->
+                if (track != null && track.origin == TrackOrigin.LOCAL && track.id != lastCountedId) {
+                    lastCountedId = track.id
+                    playCounts.increment(track.id)
+                }
+
+                // Cargar letras automáticamente cuando cambia la pista
+                if (track != null && track.id != currentLyricsTrackId) {
+                    currentLyricsTrackId = track.id
+                    _lyricsData.value = null
+                    loadLyricsForCurrentTrack()
+                } else if (track == null) {
+                    currentLyricsTrackId = null
+                    _lyricsData.value = null
+                }
             }
         }
     }
-}
+
+    fun loadLyricsForCurrentTrack() {
+        val track = currentTrack.value ?: return
+        viewModelScope.launch {
+            _loadingLyrics.value = true
+            try {
+                _lyricsData.value = LyricsRepository.getLyrics(track)
+            } catch (_: Exception) {
+                _lyricsData.value = null
+            } finally {
+                _loadingLyrics.value = false
+            }
+        }
+    }
 
 
     fun checkPermission() {

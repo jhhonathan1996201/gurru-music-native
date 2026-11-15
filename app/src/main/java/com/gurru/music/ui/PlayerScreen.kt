@@ -3,6 +3,7 @@ package com.gurru.music.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,23 +11,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -39,7 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.lazy.rememberLazyListState
+import com.gurru.music.data.LyricsData
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -80,6 +87,10 @@ fun PlayerScreen(
     val shuffle by viewModel.shuffle.collectAsState()
     val repeatMode by viewModel.repeatMode.collectAsState()
 
+    val lyricsData by viewModel.lyricsData.collectAsState()
+    val loadingLyrics by viewModel.loadingLyrics.collectAsState()
+    var showLyrics by remember { mutableStateOf(false) }
+
     /* Posición del dedo mientras se arrastra la barra, para que la
        posición del reproductor no pelee con el arrastre. */
     var sliderValue by remember { mutableStateOf<Float?>(null) }
@@ -115,27 +126,95 @@ fun PlayerScreen(
         if (!queueExpanded) {
             Spacer(modifier = Modifier.weight(0.6f))
         }
+        // ── Barra superior: fuente de la letra + botón toggle Letras / Carátula ─
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (showLyrics && lyricsData != null) {
+                Text(
+                    text = "Fuente: ${lyricsData?.source}",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = theme.accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(theme.accent.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            } else {
+                Spacer(modifier = Modifier.width(1.dp))
+            }
+
+            // Botón de alternancia Letras / Carátula
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (showLyrics) theme.accent else GurruRowBackground)
+                    .clickable {
+                        showLyrics = !showLyrics
+                        if (showLyrics && lyricsData == null) {
+                            viewModel.loadLyricsForCurrentTrack()
+                        }
+                    }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (showLyrics) Icons.Default.Image else Icons.Default.Mic,
+                    contentDescription = if (showLyrics) "Ver Carátula" else "Ver Letras",
+                    tint = if (showLyrics) GurruBackground else theme.accent,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (showLyrics) "Carátula" else "Letras",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (showLyrics) GurruBackground else Color.White
+                )
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 24.dp),
+                .padding(top = 6.dp),
             contentAlignment = Alignment.Center
         ) {
-            AsyncImage(
-                model = track?.artUri ?: R.drawable.logo,
-                contentDescription = "Portada",
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(R.drawable.logo),
-                error = painterResource(R.drawable.logo),
-                modifier = Modifier
-                    .then(
-                        if (queueExpanded) Modifier.size(260.dp)
-                        else Modifier.fillMaxWidth().aspectRatio(1f)
-                    )
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(GurruRowBackground)
-                    .shadow(12.dp, RoundedCornerShape(12.dp))
-            )
+            val viewModifier = Modifier
+                .then(
+                    if (queueExpanded) Modifier.size(260.dp)
+                    else Modifier.fillMaxWidth().aspectRatio(1f)
+                )
+
+            if (showLyrics) {
+                LyricsView(
+                    lyrics     = lyricsData,
+                    loading    = loadingLyrics,
+                    positionMs = positionMs,
+                    onSeek     = { viewModel.seekTo(it) },
+                    onRetry    = { viewModel.loadLyricsForCurrentTrack() },
+                    modifier   = viewModifier
+                )
+            } else {
+                AsyncImage(
+                    model = track?.artUri ?: R.drawable.logo,
+                    contentDescription = "Portada",
+                    contentScale = ContentScale.Crop,
+                    placeholder = painterResource(R.drawable.logo),
+                    error = painterResource(R.drawable.logo),
+                    modifier = viewModifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(GurruRowBackground)
+                        .shadow(12.dp, RoundedCornerShape(12.dp))
+                )
+            }
         }
 
         Text(
@@ -360,6 +439,137 @@ private fun QueueRow(track: Track, number: Int, playing: Boolean, onClick: () ->
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+// ── Vista de Letras (Sincronizada / Karaoke y Tap-to-Seek) ────────────────────
+
+@Composable
+private fun LyricsView(
+    lyrics: LyricsData?,
+    loading: Boolean,
+    positionMs: Long,
+    onSeek: (Long) -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val theme = LocalGurruTheme.current
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(GurruRowBackground)
+            .border(1.dp, theme.accent.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+            .padding(12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            loading -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        color = theme.accent,
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Buscando letra…", color = Color.White, fontSize = 14.sp)
+                }
+            }
+            lyrics == null || lyrics.lines.isEmpty() -> {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "No se encontró la letra de esta canción",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(theme.accent)
+                            .clickable { onRetry() }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = GurruBackground,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Reintentar",
+                            color = GurruBackground,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+            else -> {
+                // Cálculo de la línea activa en base al tiempo actual
+                val activeIndex = remember(positionMs, lyrics) {
+                    if (lyrics.isSynced) {
+                        lyrics.lines.indexOfLast { it.timeMs <= positionMs }.coerceAtLeast(0)
+                    } else -1
+                }
+
+                val listState = rememberLazyListState()
+
+                // Auto-scroll suave hacia la línea activa
+                LaunchedEffect(activeIndex) {
+                    if (lyrics.isSynced && activeIndex >= 0 && !listState.isScrollInProgress) {
+                        listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))
+                    }
+                }
+
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (lyrics.isSynced) {
+                        Text(
+                            text = "Toca cualquier línea para saltar a ese momento",
+                            fontSize = 11.sp,
+                            color = theme.soft.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp)
+                        )
+                    }
+
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        itemsIndexed(lyrics.lines) { index, line ->
+                            val isActive = (index == activeIndex)
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = line.timeMs >= 0) {
+                                        onSeek(line.timeMs)
+                                    }
+                                    .padding(vertical = if (isActive) 10.dp else 5.dp)
+                            ) {
+                                Text(
+                                    text = line.text,
+                                    fontSize = if (isActive) 20.sp else 16.sp,
+                                    fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
+                                    color = if (isActive) theme.accent else Color.White.copy(alpha = 0.40f),
+                                    lineHeight = if (isActive) 26.sp else 22.sp
+                                )
+                            }
+                        }
+                        item { Spacer(modifier = Modifier.height(24.dp)) }
+                    }
+                }
+            }
         }
     }
 }
