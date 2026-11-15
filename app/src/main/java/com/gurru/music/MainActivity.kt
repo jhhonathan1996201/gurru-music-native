@@ -26,6 +26,8 @@ import com.gurru.music.ui.MixesScreen
 import com.gurru.music.ui.PlayerScreen
 import com.gurru.music.ui.SettingsScreen
 import com.gurru.music.ui.SettingsViewModel
+import com.gurru.music.ui.YoutubeScreen
+import com.gurru.music.ui.YoutubeViewModel
 import com.gurru.music.ui.components.BottomBar
 import com.gurru.music.ui.components.BottomSection
 import com.gurru.music.ui.components.MiniPlayer
@@ -33,12 +35,8 @@ import com.gurru.music.ui.theme.GurruBackground
 import com.gurru.music.ui.theme.LocalGurruTheme
 
 /* Gurru Music nativa — Fase 1: Biblioteca local + reproductor.
-   Una sola Activity con Navigation Compose. La Biblioteca es la
-   pantalla principal; el reproductor se abre al tocar una canción y
-   el mini reproductor flotante aparece cuando algo suena (salvo en el
-   reproductor mismo). La barra inferior de 5 secciones está siempre
-   visible; Ajustes ya tiene su pantalla (temas y créditos) y las
-   demás secciones que aún no existen van a "Próximamente". */
+   Fase 3: YouTube online.
+   Una sola Activity con Navigation Compose. */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,26 +46,30 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun GurruApp() {
-    val playerViewModel: PlayerViewModel = viewModel()
+    val playerViewModel: PlayerViewModel   = viewModel()
     val settingsViewModel: SettingsViewModel = viewModel()
+    val youtubeViewModel: YoutubeViewModel = viewModel()   // Fase 3
+
     val currentTheme by settingsViewModel.theme.collectAsState()
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route
 
     val currentTrack by playerViewModel.currentTrack.collectAsState()
-    val isPlaying by playerViewModel.isPlaying.collectAsState()
+    val isPlaying    by playerViewModel.isPlaying.collectAsState()
 
     val selectedSection = when {
         route == "library" || route == "player" -> BottomSection.LIBRARY
-        route == "settings" -> BottomSection.SETTINGS
-        route == "mixes" -> BottomSection.MIXES
+        route == "settings"                     -> BottomSection.SETTINGS
+        route == "mixes"                        -> BottomSection.MIXES
+        route == "youtube"                      -> BottomSection.YOUTUBE   // Fase 3
 
-        route?.startsWith("coming/") == true -> when (backStackEntry?.arguments?.getString("section")) {
+        route?.startsWith("coming/") == true -> when (
+            backStackEntry?.arguments?.getString("section")
+        ) {
             "Descargas" -> BottomSection.DOWNLOADS
-            "YouTube" -> BottomSection.YOUTUBE
-            "Mezclas" -> BottomSection.MIXES
-            else -> BottomSection.LIBRARY
+            "Mezclas"   -> BottomSection.MIXES
+            else        -> BottomSection.LIBRARY
         }
         else -> BottomSection.LIBRARY
     }
@@ -76,76 +78,90 @@ fun GurruApp() {
        en Ajustes, la barra, el mini reproductor y todas las pantallas
        cambian de color al instante, sin reiniciar. */
     CompositionLocalProvider(LocalGurruTheme provides currentTheme) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(GurruBackground)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            NavHost(
-                navController = navController,
-                startDestination = "library",
-                modifier = Modifier.weight(1f)
-            ) {
-                composable("library") {
-                    LibraryScreen(
-                        viewModel = playerViewModel,
-                        onOpenPlayer = { navController.navigate("player") }
-                    )
-                }
-                composable("player") {
-                    PlayerScreen(viewModel = playerViewModel)
-                }
-                composable("settings") {
-                    SettingsScreen(viewModel = settingsViewModel)
-                }
-                composable("mixes") {
-                    MixesScreen(
-                        viewModel = playerViewModel,
-                        onOpenPlayer = { navController.navigate("player") }
-                    )
-                }
-                composable(
-                    "coming/{section}",
-                    arguments = listOf(navArgument("section") { type = NavType.StringType })
-                ) { entry ->
-                    ComingSoonScreen(title = entry.arguments?.getString("section") ?: "")
-                }
-            }
-            val track = currentTrack
-            if (track != null && route != "player") {
-                MiniPlayer(
-                    track = track,
-                    isPlaying = isPlaying,
-                    onTogglePlay = { playerViewModel.togglePlay() },
-                    onNext = { playerViewModel.next() },
-                    onOpenPlayer = { navController.navigate("player") }
-                )
-            }
-            BottomBar(
-                selected = selectedSection,
-                onSelect = { section ->
-                    when (section) {
-                        BottomSection.LIBRARY -> navController.navigate("library") {
-                            popUpTo("library") { inclusive = false }
-                            launchSingleTop = true
-                        }
-                       BottomSection.SETTINGS -> navController.navigate("settings") {
-    popUpTo("library") { inclusive = false }
-    launchSingleTop = true
-}
-BottomSection.MIXES -> navController.navigate("mixes") {
-    popUpTo("library") { inclusive = false }
-    launchSingleTop = true
-}
-                        else -> navController.navigate("coming/${section.label}") {
-                            popUpTo("library") { inclusive = false }
-                            launchSingleTop = true
-                        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(GurruBackground)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                NavHost(
+                    navController    = navController,
+                    startDestination = "library",
+                    modifier         = Modifier.weight(1f)
+                ) {
+                    composable("library") {
+                        LibraryScreen(
+                            viewModel    = playerViewModel,
+                            onOpenPlayer = { navController.navigate("player") }
+                        )
+                    }
+                    composable("player") {
+                        PlayerScreen(viewModel = playerViewModel)
+                    }
+                    composable("settings") {
+                        SettingsScreen(viewModel = settingsViewModel)
+                    }
+                    composable("mixes") {
+                        MixesScreen(
+                            viewModel    = playerViewModel,
+                            onOpenPlayer = { navController.navigate("player") }
+                        )
+                    }
+                    // ── Fase 3: YouTube online ──────────────────────────────
+                    composable("youtube") {
+                        YoutubeScreen(
+                            viewModel    = youtubeViewModel,
+                            onOpenPlayer = { navController.navigate("player") }
+                        )
+                    }
+                    composable(
+                        "coming/{section}",
+                        arguments = listOf(navArgument("section") { type = NavType.StringType })
+                    ) { entry ->
+                        ComingSoonScreen(title = entry.arguments?.getString("section") ?: "")
                     }
                 }
-            )
+
+                val track = currentTrack
+                if (track != null && route != "player") {
+                    MiniPlayer(
+                        track         = track,
+                        isPlaying     = isPlaying,
+                        onTogglePlay  = { playerViewModel.togglePlay() },
+                        onNext        = { playerViewModel.next() },
+                        onOpenPlayer  = { navController.navigate("player") }
+                    )
+                }
+
+                BottomBar(
+                    selected = selectedSection,
+                    onSelect = { section ->
+                        when (section) {
+                            BottomSection.LIBRARY -> navController.navigate("library") {
+                                popUpTo("library") { inclusive = false }
+                                launchSingleTop = true
+                            }
+                            BottomSection.SETTINGS -> navController.navigate("settings") {
+                                popUpTo("library") { inclusive = false }
+                                launchSingleTop = true
+                            }
+                            BottomSection.MIXES -> navController.navigate("mixes") {
+                                popUpTo("library") { inclusive = false }
+                                launchSingleTop = true
+                            }
+                            // ── Fase 3: ya no va a "Próximamente" ──────────
+                            BottomSection.YOUTUBE -> navController.navigate("youtube") {
+                                popUpTo("library") { inclusive = false }
+                                launchSingleTop = true
+                            }
+                            else -> navController.navigate("coming/${section.label}") {
+                                popUpTo("library") { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                )
+            }
         }
-    }
     }
 }

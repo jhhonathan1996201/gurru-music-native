@@ -1,0 +1,377 @@
+package com.gurru.music.ui
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.gurru.music.R
+import com.gurru.music.data.YoutubeSearchResult
+import com.gurru.music.ui.theme.GurruBackground
+import com.gurru.music.ui.theme.GurruRowBackground
+import com.gurru.music.ui.theme.LocalGurruTheme
+
+/* Pestaña YouTube: búsqueda de música en línea, radio automática y
+   reproducción con estado "Preparando…". Sin botón de descarga por fila
+   (las descargas son Fase 2, separada). */
+@Composable
+fun YoutubeScreen(
+    viewModel: YoutubeViewModel,
+    onOpenPlayer: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val theme       = LocalGurruTheme.current
+    val query       by viewModel.query.collectAsState()
+    val results     by viewModel.results.collectAsState()
+    val searching   by viewModel.searching.collectAsState()
+    val prepState   by viewModel.prepareState.collectAsState()
+    val recents     by viewModel.recents.collectAsState()
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(GurruBackground)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // ── Cabecera: logo + buscador ───────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 12.dp, end = 12.dp, top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.logo),
+                    contentDescription = "Gurru Music",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .shadow(12.dp, RoundedCornerShape(12.dp))
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                TextField(
+                    value = query,
+                    onValueChange = { viewModel.setQuery(it) },
+                    placeholder = {
+                        Text("Buscar en YouTube", color = theme.soft.copy(alpha = 0.7f))
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { viewModel.search() }),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor   = GurruRowBackground,
+                        unfocusedContainerColor = GurruRowBackground,
+                        focusedIndicatorColor   = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor        = Color.White,
+                        unfocusedTextColor      = Color.White,
+                        cursorColor             = theme.accent
+                    ),
+                    shape    = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = { viewModel.search() }) {
+                    if (searching) {
+                        CircularProgressIndicator(
+                            color     = theme.accent,
+                            modifier  = Modifier.size(22.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = "Buscar",
+                            tint   = theme.accent,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+            }
+
+            // ── Separador ──────────────────────────────────────────────────
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(theme.softBlue.copy(alpha = 0.18f))
+            )
+
+            // ── Lista de resultados y/o recientes ─────────────────────────
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
+            ) {
+                // ── Resultados de búsqueda ──────────────────────────────
+                if (results.isNotEmpty()) {
+                    items(results, key = { it.videoId }) { result ->
+                        YoutubeTrackRow(
+                            result  = result,
+                            onClick = {
+                                viewModel.play(result, fromSearch = true, onOpenPlayer = onOpenPlayer)
+                            }
+                        )
+                    }
+                } else if (query.isBlank()) {
+                    // ── Sin búsqueda activa: placeholder ───────────────
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Busca canciones, artistas o álbumes",
+                                color = theme.soft.copy(alpha = 0.6f),
+                                fontSize = 15.sp
+                            )
+                        }
+                    }
+                } else {
+                    // ── Búsqueda sin resultados ────────────────────────
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Sin resultados para \"$query\"",
+                                color = theme.soft.copy(alpha = 0.6f),
+                                fontSize = 15.sp
+                            )
+                        }
+                    }
+                }
+
+                // ── Recientes ───────────────────────────────────────────
+                if (recents.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Escuchado recientemente",
+                            color = theme.soft,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 20.dp, bottom = 4.dp)
+                        )
+                    }
+                    items(recents, key = { "rec-${it.videoId}" }) { result ->
+                        YoutubeTrackRow(
+                            result  = result,
+                            onClick = {
+                                // Los recientes NO se vuelven a agregar a recientes
+                                viewModel.play(result, fromSearch = false, onOpenPlayer = onOpenPlayer)
+                            }
+                        )
+                    }
+                }
+
+                item { Spacer(modifier = Modifier.height(12.dp)) }
+            }
+        }
+
+        // ── Overlay: Preparando… ───────────────────────────────────────────
+        if (prepState is PrepareState.Preparing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(GurruBackground.copy(alpha = 0.85f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        color       = Color(0xFFFF4D6D),
+                        strokeWidth = 3.dp,
+                        modifier    = Modifier.size(52.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text       = "Preparando…",
+                        color      = Color.White,
+                        fontSize   = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // ── Overlay: Error ─────────────────────────────────────────────────
+        if (prepState is PrepareState.Error) {
+            val err = prepState as PrepareState.Error
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(GurruBackground.copy(alpha = 0.90f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .padding(32.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(GurruRowBackground)
+                        .padding(24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ErrorOutline,
+                        contentDescription = null,
+                        tint     = Color(0xFFFF4D6D),
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text       = "No se pudo preparar la canción",
+                        color      = Color.White,
+                        fontSize   = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text     = err.message,
+                        color    = Color(0xFFFF4D6D),
+                        fontSize = 13.sp,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Row {
+                        OutlinedButton(
+                            onClick = { viewModel.dismissError() },
+                            border  = androidx.compose.foundation.BorderStroke(
+                                1.dp, Color.White.copy(alpha = 0.4f)
+                            )
+                        ) {
+                            Text("Cancelar", color = Color.White)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Button(
+                            onClick = { viewModel.retry(err.result, onOpenPlayer) },
+                            colors  = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFF4D6D),
+                                contentColor   = Color.White
+                            )
+                        ) {
+                            Text("Reintentar", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Fila de resultado de YouTube ──────────────────────────────────────────────
+
+/* Muestra: thumbnail 52×52, título (cian si suena), artista · duración.
+   Sin botón de descarga (Fase 2). */
+@Composable
+private fun YoutubeTrackRow(
+    result: YoutubeSearchResult,
+    onClick: () -> Unit
+) {
+    val theme = LocalGurruTheme.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model               = result.thumbnailUrl ?: R.drawable.logo,
+            contentDescription  = null,
+            contentScale        = ContentScale.Crop,
+            placeholder         = painterResource(R.drawable.logo),
+            error               = painterResource(R.drawable.logo),
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(GurruRowBackground)
+                .border(1.dp, Color(0xFFFF4D6D).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 10.dp)
+        ) {
+            Text(
+                text       = result.title,
+                fontSize   = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color      = Color.White,
+                maxLines   = 1,
+                overflow   = TextOverflow.Ellipsis
+            )
+            Text(
+                text     = "${result.artist} · ${formatDuration(result.durationSec)}",
+                fontSize = 12.5.sp,
+                color    = theme.soft,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+private fun formatDuration(secs: Double): String {
+    val total = secs.toLong().coerceAtLeast(0)
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0)
+        "$h:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}"
+    else
+        "$m:${s.toString().padStart(2, '0')}"
+}

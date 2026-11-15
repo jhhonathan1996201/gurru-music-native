@@ -14,6 +14,8 @@
          SecurityException. Es un permiso normal: se concede al instalar,
          sin pedirlo al usuario. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Fase 3: YouTube online — necesario para buscar y hacer streaming. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".GurruApplication"

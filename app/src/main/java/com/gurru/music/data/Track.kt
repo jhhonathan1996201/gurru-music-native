@@ -1,17 +1,19 @@
 package com.gurru.music.data
 
-/* Canción de la biblioteca. En Fase 1 solo hay música local; los demás
-   orígenes (YouTube, descargas) llegan en fases siguientes. */
-enum class TrackOrigin { LOCAL }
+/* Canción de la biblioteca.
+   LOCAL  → música del teléfono (Fase 1).
+   YOUTUBE → stream de YouTube (Fase 3). */
+enum class TrackOrigin { LOCAL, YOUTUBE }
 
 data class Track(
-    val id: String,            // "local-<MediaStore id>"
+    val id: String,            // "local-<MediaStore id>" | "youtube-<videoId>"
     val title: String,
     val artist: String,
     val album: String,
-    val durationSec: Double,   // segundos (MediaStore guarda milisegundos)
-    val artUri: String?,       // portada del álbum (content://...albumart/<id>), o null
-    val audioUri: String,      // content:// URI del archivo, lista para ExoPlayer
-    val folder: String,        // carpeta padre del archivo (pestaña Carpetas)
-    val origin: TrackOrigin = TrackOrigin.LOCAL
+    val durationSec: Double,   // segundos
+    val artUri: String?,       // content://...albumart/<id> (local) | thumbnail HTTPS (youtube)
+    val audioUri: String,      // content:// URI del archivo (local) | URL del stream (youtube)
+    val folder: String,        // carpeta del archivo (local) | "" (youtube)
+    val origin: TrackOrigin = TrackOrigin.LOCAL,
+    val youtubeId: String? = null  // ID del video; solo cuando origin == YOUTUBE
 )

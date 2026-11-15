@@ -121,6 +121,14 @@ object PlayerManager {
         loadAt(index)
     }
 
+    /* Agrega canciones al final de la cola actual sin interrumpir la
+       reproducción. Lo usa la radio de YouTube para extender la cola
+       conforme van resolviéndose las URLs de los tracks relacionados. */
+    fun appendToQueue(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        _queue.value = _queue.value + tracks
+    }
+
     /* Carga UNA sola canción en el reproductor y la pone a sonar. */
     private fun loadAt(index: Int) {
         val track = _queue.value[index]
