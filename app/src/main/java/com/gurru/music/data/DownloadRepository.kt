@@ -15,6 +15,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +34,7 @@ import java.io.OutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 private val Context.downloadsDs by preferencesDataStore(name = "gurru_downloads")
 
@@ -155,6 +160,232 @@ object DownloadRepository {
 
     // ── Proceso de Descarga ────────────────────────────────────────────────────
 
+
+    // ── Descarga en paralelo por rangos ──────────────────────────────────
+    // YouTube limita cada conexión a ~33 KB/s. Descargar el archivo en 4
+    // partes a la vez (cada una por su propia conexión) suma las
+    // velocidades (~130 KB/s). Además cada parte se reanuda si se corta
+    // la conexión (por ejemplo, al salir de la app y volver), porque el
+    // archivo de la parte queda guardado y solo falta lo que no se bajó.
+
+    private const val DOWNLOAD_PARTS = 4
+    private const val PART_MAX_RETRIES = 3
+
+    private class RangeNotSupportedException : Exception("El servidor no soporta descarga por rangos")
+
+    // Tamaño total del archivo (bytes). Solo se leen los encabezados de
+    // una petición GET. Devuelve -1 si no se pudo saber.
+    private fun getContentLength(downloadUrl: String): Long {
+        var conn: HttpURLConnection? = null
+        return try {
+            val url = URL(downloadUrl)
+            conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 10_000
+            conn.setRequestProperty("User-Agent", USER_AGENT)
+            conn.setRequestProperty("Referer", "https://www.youtube.com/")
+            conn.instanceFollowRedirects = true
+            if (conn.responseCode !in 200..299) return -1L
+            val len = conn.contentLengthLong
+            if (len > 0) len else -1L
+        } catch (_: Exception) {
+            -1L
+        } finally {
+            try { conn?.inputStream?.close() } catch (_: Exception) { }
+            conn?.disconnect()
+        }
+    }
+
+    // Descarga un rango [start, end] a partFile. Si partFile ya tiene
+    // bytes (de un intento anterior), reanuda desde donde quedó.
+    // Reintenta hasta PART_MAX_RETRIES veces si la conexión se corta.
+    private suspend fun downloadRangeWithRetry(
+        downloadUrl: String,
+        start: Long,
+        end: Long,
+        partFile: File,
+        downloadedBytes: AtomicLong,
+        onProgress: () -> Unit
+    ) {
+        val expected = end - start + 1
+        var attempt = 0
+        var lastError: Exception? = null
+        while (attempt < PART_MAX_RETRIES) {
+            try {
+                val already = if (partFile.exists()) partFile.length() else 0L
+                if (already >= expected) return
+                val rangeStart = start + already
+                val url = URL(downloadUrl)
+                val conn = url.openConnection() as HttpURLConnection
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 20_000
+                conn.setRequestProperty("User-Agent", USER_AGENT)
+                conn.setRequestProperty("Referer", "https://www.youtube.com/")
+                conn.setRequestProperty("Accept", "*/*")
+                conn.setRequestProperty("Connection", "keep-alive")
+                conn.setRequestProperty("Accept-Encoding", "identity")
+                conn.setRequestProperty("Range", "bytes=$rangeStart-$end")
+                conn.instanceFollowRedirects = true
+                val code = conn.responseCode
+                if (code == 200) {
+                    // El servidor ignoró el Range y manda el archivo
+                    // completo: no sirve para descargar por partes.
+                    conn.disconnect()
+                    throw RangeNotSupportedException()
+                }
+                if (code != 206) {
+                    conn.disconnect()
+                    throw Exception("Error de conexión al descargar: HTTP $code")
+                }
+                val input = conn.inputStream
+                val out = FileOutputStream(partFile, true) // append = reanudar
+                val buffer = ByteArray(64 * 1024)
+                var bytesRead: Int
+                try {
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        out.write(buffer, 0, bytesRead)
+                        downloadedBytes.addAndGet(bytesRead.toLong())
+                        onProgress()
+                    }
+                } finally {
+                    try { out.close() } catch (_: Exception) { }
+                    try { input.close() } catch (_: Exception) { }
+                    conn.disconnect()
+                }
+                if (partFile.length() == expected) return
+                lastError = Exception("Parte incompleta al descargar")
+                attempt++
+            } catch (e: RangeNotSupportedException) {
+                throw e
+            } catch (e: Exception) {
+                lastError = e
+                attempt++
+                if (attempt < PART_MAX_RETRIES) delay(1000L * attempt)
+            }
+        }
+        throw lastError ?: Exception("Fallo al descargar parte")
+    }
+
+    // Descarga el audio en DOWNLOAD_PARTS partes en paralelo y lo guarda
+    // en la Biblioteca. Devuelve true si se completó (ya quedó
+    // finalizado), false si el servidor no soporta rangos (para que el
+    // llamador use la descarga simple). Lanza excepción si falló de verdad.
+    private suspend fun tryDownloadInParallel(
+        task: DownloadTask,
+        downloadUrl: String,
+        totalBytes: Long
+    ): Boolean {
+        var outputStream: OutputStream? = null
+        var targetUri: Uri? = null
+        var targetFile: File? = null
+        val tempDir = File(appCtx.cacheDir, "gurru_dl_${task.videoId}").apply { mkdirs() }
+        try {
+            val partSize = totalBytes / DOWNLOAD_PARTS
+            val downloadedBytes = AtomicLong(0L)
+            for (p in 0 until DOWNLOAD_PARTS) {
+                val f = File(tempDir, "part$p")
+                if (f.exists()) downloadedBytes.addAndGet(f.length())
+            }
+            val downloadStartMs = System.currentTimeMillis()
+            val lastReportedProgress = AtomicLong(-1)
+            val lastReportTime = AtomicLong(0L)
+
+            fun reportProgress() {
+                val done = downloadedBytes.get()
+                val currentProgress = ((done * 100) / totalBytes).toInt().coerceIn(0, 100)
+                val now = System.currentTimeMillis()
+                val prevProgress = lastReportedProgress.get()
+                val prevTime = lastReportTime.get()
+                if (currentProgress == 100 || (currentProgress >= prevProgress + 2 && now - prevTime > 250)) {
+                    if (lastReportedProgress.compareAndSet(prevProgress, currentProgress.toLong())) {
+                        lastReportTime.set(now)
+                        val elapsedSec = ((now - downloadStartMs) / 1000.0).coerceAtLeast(0.5)
+                        val speed = (done / elapsedSec).toLong()
+                        updateTask(task.videoId) {
+                            it.copy(
+                                progress = currentProgress,
+                                bytesDownloaded = done,
+                                totalBytes = totalBytes,
+                                speedBytesPerSec = speed
+                            )
+                        }
+                    }
+                }
+            }
+
+            coroutineScope {
+                val jobs = (0 until DOWNLOAD_PARTS).map { part ->
+                    val start = part * partSize
+                    val end = if (part == DOWNLOAD_PARTS - 1) totalBytes - 1 else (part + 1) * partSize - 1
+                    async {
+                        downloadRangeWithRetry(downloadUrl, start, end, File(tempDir, "part$part"), downloadedBytes, ::reportProgress)
+                    }
+                }
+                jobs.awaitAll()
+            }
+
+            for (part in 0 until DOWNLOAD_PARTS) {
+                val start = part * partSize
+                val end = if (part == DOWNLOAD_PARTS - 1) totalBytes - 1 else (part + 1) * partSize - 1
+                val expected = end - start + 1
+                val f = File(tempDir, "part$part")
+                if (!f.exists() || f.length() != expected) {
+                    throw Exception("Parte $part incompleta al descargar")
+                }
+            }
+
+            val safeArtist = sanitizeFileName(task.artist.ifBlank { "Desconocido" })
+            val safeTitle = sanitizeFileName(task.title.ifBlank { "Audio" })
+            val fileName = "$safeArtist - $safeTitle.m4a"
+            val created = createAudioOutputFile(fileName, task.title, task.artist)
+            outputStream = created.first
+            targetUri = created.second
+            targetFile = created.third
+            if (outputStream == null) {
+                throw Exception("No se pudo crear el archivo en el almacenamiento del teléfono")
+            }
+            for (part in 0 until DOWNLOAD_PARTS) {
+                File(tempDir, "part$part").inputStream().use { input ->
+                    input.copyTo(outputStream)
+                }
+            }
+            outputStream.flush()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && targetUri != null) {
+                val completeValues = ContentValues().apply {
+                    put(MediaStore.Audio.Media.IS_PENDING, 0)
+                }
+                appCtx.contentResolver.update(targetUri, completeValues, null, null)
+            }
+            targetFile?.let { f ->
+                MediaScannerConnection.scanFile(appCtx, arrayOf(f.absolutePath), arrayOf("audio/mp4"), null)
+            }
+            val finalTask = task.copy(
+                progress = 100,
+                status = DownloadStatus.COMPLETED,
+                localUri = targetUri?.toString(),
+                localPath = targetFile?.absolutePath
+            )
+            updateTask(task.videoId) { finalTask }
+            saveDownloads(_downloads.value)
+            tempDir.deleteRecursively()
+            return true
+        } catch (e: RangeNotSupportedException) {
+            try { tempDir.deleteRecursively() } catch (_: Exception) { }
+            try { outputStream?.close() } catch (_: Exception) { }
+            cleanupPartial(targetUri, targetFile)
+            return false
+        } catch (e: CancellationException) {
+            try { outputStream?.close() } catch (_: Exception) { }
+            cleanupPartial(targetUri, targetFile)
+            throw e
+        } catch (e: Exception) {
+            try { outputStream?.close() } catch (_: Exception) { }
+            cleanupPartial(targetUri, targetFile)
+            throw e
+        }
+    }
+
     private suspend fun executeDownload(task: DownloadTask) = withContext(Dispatchers.IO) {
         var outputStream: OutputStream? = null
         var targetUri: Uri? = null
@@ -171,6 +402,18 @@ object DownloadRepository {
             // necesita velocidad de tiempo real)
             val downloadUrl = if (streamUrl.contains("ratebypass=")) streamUrl
             else streamUrl + if (streamUrl.contains("?")) "&ratebypass=yes" else "?ratebypass=yes"
+
+            // NUEVO: intentar primero la descarga en paralelo por rangos
+            // (4 conexiones a la vez, ~130 KB/s en vez de ~33 KB/s, y cada
+            // parte se reanuda si se corta al salir de la app). Si el
+            // servidor no soporta rangos, devuelve false y se sigue con
+            // la descarga simple de abajo.
+            val totalBytesForParallel = getContentLength(downloadUrl)
+            if (totalBytesForParallel > 512 * 1024) {
+                if (tryDownloadInParallel(task, downloadUrl, totalBytesForParallel)) {
+                    return@withContext
+                }
+            }
 
             // 2. Conectar al stream
             updateTask(task.videoId) { it.copy(status = DownloadStatus.DOWNLOADING) }
