@@ -1,5 +1,6 @@
 package com.gurru.music.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -69,9 +71,15 @@ fun YoutubeScreen(
     val prepState   by viewModel.prepareState.collectAsState()
     val recents     by viewModel.recents.collectAsState()
 
+    // Atrás borra la búsqueda (si hay una activa) en vez de salir
+    BackHandler(enabled = query.isNotBlank() || results.isNotEmpty()) {
+        viewModel.clearSearch()
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
+            .statusBarsPadding()
             .background(GurruBackground)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {

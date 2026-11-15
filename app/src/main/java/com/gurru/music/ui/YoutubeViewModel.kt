@@ -127,6 +127,16 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
 
     fun dismissError() { _prepareState.value = PrepareState.Idle }
 
+    /* Borra la búsqueda actual (texto y resultados) y la última búsqueda
+       guardada, para que no vuelva al reabrir la app. */
+    fun clearSearch() {
+        _query.value = ""
+        _results.value = emptyList()
+        viewModelScope.launch(Dispatchers.IO) {
+            YoutubeRepository.clearLastSearch()
+        }
+    }
+
     // ── Radio ──────────────────────────────────────────────────────────────────
 
     /* Cuando empieza a sonar un track de YouTube, busca videos relacionados

@@ -456,6 +456,16 @@ object YoutubeRepository {
         return query to resultsFromJson(resultsJson)
     }
 
+    /* Borra la última búsqueda guardada (para que no vuelva al reabrir). */
+    suspend fun clearLastSearch() {
+        try {
+            appCtx.youtubeDs.edit { prefs ->
+                prefs.remove(KEY_LAST_QUERY)
+                prefs.remove(KEY_LAST_RESULTS)
+            }
+        } catch (_: Exception) { }
+    }
+
     // ── Visitor Data (YouTube Token) ───────────────────────────────────────────
 
     private fun ensureVisitorData(): String {
