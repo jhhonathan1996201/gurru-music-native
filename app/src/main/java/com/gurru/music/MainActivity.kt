@@ -110,7 +110,10 @@ fun GurruApp() {
                         )
                     }
                     composable("settings") {
-                        SettingsScreen(viewModel = settingsViewModel)
+                        SettingsScreen(
+                            viewModel = settingsViewModel,
+                            playerViewModel = playerViewModel
+                        )
                     }
                     composable("mixes") {
                         MixesScreen(

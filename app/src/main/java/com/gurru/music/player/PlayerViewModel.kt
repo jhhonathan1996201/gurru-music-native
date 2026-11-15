@@ -3,6 +3,7 @@ package com.gurru.music.player
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.gurru.music.data.LyricsCache
 import com.gurru.music.data.LyricsData
 import com.gurru.music.data.LyricsRepository
 import com.gurru.music.data.MediaStoreScanner
@@ -52,6 +53,51 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val loadingLyrics: StateFlow<Boolean> = _loadingLyrics.asStateFlow()
 
     private var currentLyricsTrackId: String? = null
+
+    // ── Descargar letras de toda la Biblioteca ──────────────────────────
+    private val _lyricsBatchRunning = MutableStateFlow(false)
+    val lyricsBatchRunning: StateFlow<Boolean> = _lyricsBatchRunning.asStateFlow()
+    private val _lyricsBatchDone = MutableStateFlow(0)
+    val lyricsBatchDone: StateFlow<Int> = _lyricsBatchDone.asStateFlow()
+    private val _lyricsBatchTotal = MutableStateFlow(0)
+    val lyricsBatchTotal: StateFlow<Int> = _lyricsBatchTotal.asStateFlow()
+    private val _lyricsBatchFound = MutableStateFlow(0)
+    val lyricsBatchFound: StateFlow<Int> = _lyricsBatchFound.asStateFlow()
+    private val _lyricsBatchFinished = MutableStateFlow(false)
+    val lyricsBatchFinished: StateFlow<Boolean> = _lyricsBatchFinished.asStateFlow()
+
+    /* Baja las letras de todas las canciones locales de la Biblioteca y
+       las guarda en el caché de la app (para verlas sin internet). Las
+       que ya tienen letra guardada se saltan. Corre en segundo plano y
+       reporta el avance para mostrarlo en Ajustes. */
+    fun downloadLibraryLyrics() {
+        if (_lyricsBatchRunning.value) return
+        val localTracks = _tracks.value.filter { it.origin == TrackOrigin.LOCAL }
+        if (localTracks.isEmpty()) return
+        viewModelScope.launch {
+            _lyricsBatchRunning.value = true
+            _lyricsBatchFinished.value = false
+            _lyricsBatchTotal.value = localTracks.size
+            _lyricsBatchDone.value = 0
+            _lyricsBatchFound.value = 0
+            var found = 0
+            for ((index, track) in localTracks.withIndex()) {
+                try {
+                    if (LyricsCache.has(track.artist, track.title)) {
+                        found++
+                    } else {
+                        val data = LyricsRepository.getLyrics(track)
+                        if (data != null) found++
+                    }
+                } catch (_: Exception) {
+                }
+                _lyricsBatchDone.value = index + 1
+                _lyricsBatchFound.value = found
+            }
+            _lyricsBatchRunning.value = false
+            _lyricsBatchFinished.value = true
+        }
+    }
 
     init {
         if (_hasPermission.value) scanLibrary()

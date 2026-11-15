@@ -3,7 +3,9 @@ package com.gurru.music.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gurru.music.BuildConfig
+import com.gurru.music.player.PlayerViewModel
 import com.gurru.music.ui.theme.GurruBackground
 import com.gurru.music.ui.theme.LocalGurruTheme
 
@@ -39,6 +42,7 @@ import com.gurru.music.ui.theme.LocalGurruTheme
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    playerViewModel: PlayerViewModel,
     modifier: Modifier = Modifier
 ) {
     val theme = LocalGurruTheme.current
@@ -69,42 +73,123 @@ fun SettingsScreen(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
-        items(viewModel.themes, key = { it.name }) { t ->
-            val active = t.name == currentTheme.name
+        // 7 temas en cuadrícula de 2 columnas para verlos todos de una vez
+        items(viewModel.themes.chunked(2), key = { it.firstOrNull()?.name ?: "" }) { row ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { viewModel.selectTheme(t.name) }
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(t.accent, CircleShape)
-                        .then(
-                            if (active) Modifier.border(2.dp, Color.White, CircleShape)
-                            else Modifier
-                        )
-                ) {
-                    if (active) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Tema activo",
-                            tint = GurruBackground,
-                            modifier = Modifier.size(20.dp)
-                        )
+                for (t in row) {
+                    val active = t.name == currentTheme.name
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (active) t.accent.copy(alpha = 0.18f)
+                                else Color.White.copy(alpha = 0.06f)
+                            )
+                            .border(
+                                width = if (active) 2.dp else 1.dp,
+                                color = if (active) t.accent
+                                else Color.White.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable { viewModel.selectTheme(t.name) }
+                            .padding(vertical = 14.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(t.accent, CircleShape)
+                            ) {
+                                if (active) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Tema activo",
+                                        tint = GurruBackground,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = t.label,
+                                fontSize = 14.sp,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                                color = if (active) t.accent else Color.White,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
                     }
                 }
+                // La última fila tiene un solo tema: rellena el hueco
+                if (row.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+        item {
+            Text(
+                text = "Letras",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = theme.soft,
+                modifier = Modifier.padding(top = 28.dp, bottom = 8.dp)
+            )
+        }
+        item {
+            // Las letras se guardan dentro de la app para verlas sin
+            // internet. Al descargar una canción su letra se guarda sola;
+            // aquí se bajan las de toda la Biblioteca de una vez.
+            val batchRunning by playerViewModel.lyricsBatchRunning.collectAsState()
+            val batchDone by playerViewModel.lyricsBatchDone.collectAsState()
+            val batchTotal by playerViewModel.lyricsBatchTotal.collectAsState()
+            val batchFound by playerViewModel.lyricsBatchFound.collectAsState()
+            val batchFinished by playerViewModel.lyricsBatchFinished.collectAsState()
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = t.label,
-                    fontSize = 16.sp,
-                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                    color = if (active) t.accent else Color.White,
-                    modifier = Modifier.padding(start = 14.dp)
+                    text = "Las letras se guardan dentro de la app para verlas sin internet. Al descargar una canción, su letra se guarda sola.",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.8f)
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(theme.accent.copy(alpha = 0.18f))
+                        .clickable(enabled = !batchRunning) { playerViewModel.downloadLibraryLyrics() }
+                        .padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (batchRunning) "Descargando letras… $batchDone/$batchTotal"
+                        else "Descargar letras de la Biblioteca",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = theme.accent
+                    )
+                }
+                if (batchRunning) {
+                    Text(
+                        text = "Guardadas: $batchFound de $batchDone revisadas",
+                        fontSize = 13.sp,
+                        color = theme.soft,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                } else if (batchFinished) {
+                    Text(
+                        text = "Listo: $batchFound letras guardadas de $batchTotal canciones.",
+                        fontSize = 13.sp,
+                        color = theme.soft,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
             }
         }
         item {

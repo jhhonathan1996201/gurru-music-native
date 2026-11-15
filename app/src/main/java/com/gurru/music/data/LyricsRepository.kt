@@ -1,5 +1,6 @@
 package com.gurru.music.data
 
+import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -24,9 +25,28 @@ object LyricsRepository {
     private val lyricsCache = ConcurrentHashMap<String, LyricsData>()
     private const val USER_AGENT = "GurruMusic/1.0 (Android)"
 
+    /* El caché en disco vive en el almacenamiento interno de la app
+       (filesDir/lyrics/). Se inicializa al arrancar la app. */
+    fun init(context: Context) {
+        LyricsCache.init(context)
+    }
+
+    /* Guarda el resultado en memoria Y en disco, para que la letra se
+       vea sin internet la próxima vez. */
+    private fun storeResult(cacheKey: String, track: Track, data: LyricsData) {
+        lyricsCache[cacheKey] = data
+        LyricsCache.save(track.artist, track.title, data)
+    }
+
     suspend fun getLyrics(track: Track): LyricsData? = withContext(Dispatchers.IO) {
         val cacheKey = "${track.artist.lowercase()}-${track.title.lowercase()}".trim()
         lyricsCache[cacheKey]?.let { return@withContext it }
+
+        // Caché en disco (sin internet): si ya se guardó antes, usarla.
+        LyricsCache.get(track.artist, track.title)?.let { disk ->
+            lyricsCache[cacheKey] = disk
+            return@withContext disk
+        }
 
         val cleanTitle = sanitizeTitle(track.title)
         val cleanArtist = sanitizeArtist(track.artist)
@@ -34,28 +54,28 @@ object LyricsRepository {
         // ── 1. Fuente 1: LRCLIB (Obtención directa sincronizada) ───────────────
         val lrclibDirect = fetchLrclibDirect(cleanTitle, cleanArtist, track.durationSec)
         if (lrclibDirect != null && lrclibDirect.isSynced && lrclibDirect.lines.isNotEmpty()) {
-            lyricsCache[cacheKey] = lrclibDirect
+            storeResult(cacheKey, track, lrclibDirect)
             return@withContext lrclibDirect
         }
 
         // ── 2. Fuente 2: LRCLIB (Búsqueda abierta) ─────────────────────────────
         val lrclibSearch = fetchLrclibSearch("$cleanArtist $cleanTitle")
         if (lrclibSearch != null && lrclibSearch.isSynced && lrclibSearch.lines.isNotEmpty()) {
-            lyricsCache[cacheKey] = lrclibSearch
+            storeResult(cacheKey, track, lrclibSearch)
             return@withContext lrclibSearch
         }
 
         // ── 3. Fuente 3: YouTube Music InnerTube ───────────────────────────────
         val ytMusicLyrics = fetchYouTubeMusicLyrics(track.youtubeId, cleanTitle, cleanArtist)
         if (ytMusicLyrics != null && ytMusicLyrics.lines.isNotEmpty()) {
-            lyricsCache[cacheKey] = ytMusicLyrics
+            storeResult(cacheKey, track, ytMusicLyrics)
             return@withContext ytMusicLyrics
         }
 
         // ── 4. Fallback: Si LRCLIB encontró letra en texto plano (sin sync) ────
         val fallbackPlain = lrclibDirect ?: lrclibSearch
         if (fallbackPlain != null && fallbackPlain.lines.isNotEmpty()) {
-            lyricsCache[cacheKey] = fallbackPlain
+            storeResult(cacheKey, track, fallbackPlain)
             return@withContext fallbackPlain
         }
 

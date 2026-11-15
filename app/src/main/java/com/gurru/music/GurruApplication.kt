@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ContentValues
 import android.provider.MediaStore
 import com.gurru.music.data.DownloadRepository
+import com.gurru.music.data.LyricsRepository
 import com.gurru.music.data.YoutubeRepository
 import com.gurru.music.player.PlayerManager
 import java.io.PrintWriter
@@ -22,6 +23,7 @@ class GurruApplication : Application() {
         PlayerManager.init(this)
         YoutubeRepository.init(this)   // Fase 3: YouTube online
         DownloadRepository.init(this)  // Descargas online
+        LyricsRepository.init(this)   // Caché de letras en la app
     }
 
     private fun installCrashLog() {

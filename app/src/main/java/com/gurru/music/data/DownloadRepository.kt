@@ -158,6 +158,31 @@ object DownloadRepository {
         )
     }
 
+    // ── Letra al terminar la descarga ────────────────────────────────────────
+    // Cuando una descarga termina, baja su letra y la guarda en el caché
+    // de la app (para verla sin internet). No bloquea nada: si no hay
+    // letra o falla, la descarga ya quedó y no pasa nada.
+    private fun fetchLyricsForCompleted(task: DownloadTask) {
+        scope.launch {
+            try {
+                val track = Track(
+                    id          = "download-${task.videoId}",
+                    title       = task.title,
+                    artist      = task.artist,
+                    album       = "Gurru Music",
+                    durationSec = task.durationSec,
+                    artUri      = task.thumbnailUrl,
+                    audioUri    = task.localUri ?: task.localPath ?: "",
+                    folder      = "Gurru Music",
+                    origin      = TrackOrigin.YOUTUBE,
+                    youtubeId   = task.videoId
+                )
+                LyricsRepository.getLyrics(track)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     // ── Proceso de Descarga ────────────────────────────────────────────────────
 
 
@@ -368,6 +393,7 @@ object DownloadRepository {
             )
             updateTask(task.videoId) { finalTask }
             saveDownloads(_downloads.value)
+            fetchLyricsForCompleted(task)
             tempDir.deleteRecursively()
             return true
         } catch (e: RangeNotSupportedException) {
@@ -508,6 +534,7 @@ object DownloadRepository {
 
             updateTask(task.videoId) { finalTask }
             saveDownloads(_downloads.value)
+            fetchLyricsForCompleted(task)
 
         } catch (e: CancellationException) {
             // Cancelada por el usuario: limpiar archivo parcial
