@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -67,11 +68,13 @@ fun YoutubeScreen(
     viewModel: YoutubeViewModel,
     downloadsViewModel: DownloadsViewModel? = null,
     onOpenPlayer: () -> Unit,
+    onOpenArtist: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val theme       = LocalGurruTheme.current
     val query       by viewModel.query.collectAsState()
     val results     by viewModel.results.collectAsState()
+    val suggestedArtist by viewModel.suggestedArtist.collectAsState()
     val searching   by viewModel.searching.collectAsState()
     val prepState   by viewModel.prepareState.collectAsState()
     val recents     by viewModel.recents.collectAsState()
@@ -173,6 +176,17 @@ fun YoutubeScreen(
                     .padding(horizontal = 12.dp)
             ) {
                 // ── Resultados de búsqueda ──────────────────────────────
+                // Tarjeta del artista (Fase 4): arriba de las canciones
+                // cuando la búsqueda es de un artista. Tocar abre su página.
+                if (results.isNotEmpty() && suggestedArtist != null) {
+                    item {
+                        ArtistCard(
+                            artistName = suggestedArtist!!,
+                            onClick = { onOpenArtist(suggestedArtist!!) }
+                        )
+                    }
+                }
+
                 if (results.isNotEmpty()) {
                     items(results, key = { it.videoId }) { result ->
                         YoutubeTrackRow(
@@ -340,9 +354,10 @@ fun YoutubeScreen(
 
 // ── Fila de resultado de YouTube ──────────────────────────────────────────────
 
-/* Muestra: thumbnail 52×52, título, artista · duración y botón de descarga. */
+/* Muestra: thumbnail 52×52, título, artista · duración y botón de descarga.
+   Es pública para reusarla en la página del artista (Fase 4). */
 @Composable
-private fun YoutubeTrackRow(
+fun YoutubeTrackRow(
     result: YoutubeSearchResult,
     onClick: () -> Unit,
     onDownload: (() -> Unit)? = null,
@@ -451,6 +466,71 @@ private fun YoutubeTrackRow(
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/* Tarjeta del artista (Fase 4): aparece arriba de los resultados
+   cuando la búsqueda es de un artista. Muestra el nombre del artista
+   (del campo artista de los resultados, no de una canción) y abre su
+   página al tocarla. */
+@Composable
+private fun ArtistCard(
+    artistName: String,
+    onClick: () -> Unit
+) {
+    val theme = LocalGurruTheme.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(GurruRowBackground)
+            .border(1.dp, theme.accent.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(26.dp))
+                .background(theme.accent.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                tint = theme.accent,
+                modifier = Modifier.size(30.dp)
+            )
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp)
+        ) {
+            Text(
+                text = artistName,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Artista · Ver top 10 y álbumes",
+                fontSize = 12.5.sp,
+                color = theme.soft,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Text(
+            text = "Ver artista",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = theme.accent
+        )
+    }
+}
 
 private fun formatDuration(secs: Double): String {
     val total = secs.toLong().coerceAtLeast(0)

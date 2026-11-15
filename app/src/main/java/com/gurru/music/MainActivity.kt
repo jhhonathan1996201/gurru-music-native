@@ -1,5 +1,6 @@
 package com.gurru.music
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,6 +21,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.gurru.music.player.PlayerViewModel
+import com.gurru.music.ui.ArtistScreen
+import com.gurru.music.ui.ArtistViewModel
 import com.gurru.music.ui.ComingSoonScreen
 import com.gurru.music.ui.DownloadsScreen
 import com.gurru.music.ui.DownloadsViewModel
@@ -52,6 +55,7 @@ fun GurruApp() {
     val settingsViewModel: SettingsViewModel = viewModel()
     val youtubeViewModel: YoutubeViewModel = viewModel()   // Fase 3
     val downloadsViewModel: DownloadsViewModel = viewModel() // Descargas
+    val artistViewModel: ArtistViewModel = viewModel()       // Fase 4
 
     val currentTheme by settingsViewModel.theme.collectAsState()
     val navController = rememberNavController()
@@ -67,6 +71,7 @@ fun GurruApp() {
         route == "mixes"                        -> BottomSection.MIXES
         route == "youtube"                      -> BottomSection.YOUTUBE   // Fase 3
         route == "downloads"                    -> BottomSection.DOWNLOADS // Descargas
+        route?.startsWith("artist/") == true    -> BottomSection.YOUTUBE   // Fase 4
 
         route?.startsWith("coming/") == true -> when (
             backStackEntry?.arguments?.getString("section")
@@ -115,7 +120,25 @@ fun GurruApp() {
                         YoutubeScreen(
                             viewModel          = youtubeViewModel,
                             downloadsViewModel = downloadsViewModel,
-                            onOpenPlayer       = { navController.navigate("player") }
+                            onOpenPlayer       = { navController.navigate("player") },
+                            onOpenArtist       = { artist ->
+                                navController.navigate("artist/${Uri.encode(artist)}")
+                            }
+                        )
+                    }
+                    // ── Fase 4: página del artista ───────────────────────
+                    composable(
+                        "artist/{artistName}",
+                        arguments = listOf(navArgument("artistName") { type = NavType.StringType })
+                    ) { entry ->
+                        val raw = entry.arguments?.getString("artistName") ?: ""
+                        ArtistScreen(
+                            artistName = Uri.decode(raw),
+                            artistViewModel = artistViewModel,
+                            youtubeViewModel = youtubeViewModel,
+                            downloadsViewModel = downloadsViewModel,
+                            onOpenPlayer = { navController.navigate("player") },
+                            onBack = { navController.popBackStack() }
                         )
                     }
                     // ── Pestaña Descargas ────────────────────────────────────

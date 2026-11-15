@@ -75,9 +75,7 @@ object YoutubeRepository {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return@withContext emptyList()
 
-        val results = executeMusicSearch(trimmed, withSongsFilter = true).ifEmpty {
-            executeMusicSearch(trimmed, withSongsFilter = false)
-        }
+        val results = searchSongs(trimmed)
 
         // Persistir última búsqueda en DataStore
         try {
@@ -88,6 +86,17 @@ object YoutubeRepository {
         } catch (_: Exception) { }
 
         results
+    }
+
+    /* Búsqueda de canciones SIN guardar en DataStore. La usa la página
+       del artista (top 10 y canciones de un álbum) para no sobrescribir
+       la última búsqueda del usuario. */
+    suspend fun searchSongs(query: String): List<YoutubeSearchResult> = withContext(Dispatchers.IO) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return@withContext emptyList()
+        executeMusicSearch(trimmed, withSongsFilter = true).ifEmpty {
+            executeMusicSearch(trimmed, withSongsFilter = false)
+        }
     }
 
     private fun executeMusicSearch(query: String, withSongsFilter: Boolean): List<YoutubeSearchResult> {

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gurru.music.data.TrackOrigin
 import com.gurru.music.data.YoutubeRepository
+import com.gurru.music.data.normalizeForMatch
 import com.gurru.music.data.YoutubeSearchResult
 import com.gurru.music.player.PlayerManager
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +41,11 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
     private val _recents = MutableStateFlow<List<YoutubeSearchResult>>(emptyList())
     val recents: StateFlow<List<YoutubeSearchResult>> = _recents.asStateFlow()
 
+    /* Artista sugerido para la tarjeta "Ver artista" (Fase 4): el artista
+       de los resultados de búsqueda. */
+    private val _suggestedArtist = MutableStateFlow<String?>(null)
+    val suggestedArtist: StateFlow<String?> = _suggestedArtist.asStateFlow()
+
     // Video ID del track que ya generó radio (para no pedirlo dos veces)
     private var lastRadioId: String? = null
 
@@ -52,6 +58,7 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
             _query.value   = q
             _results.value = r
             _recents.value = YoutubeRepository.getRecents()
+            _suggestedArtist.value = computeSuggestedArtist(r, q)
         }
 
         // Observar cambios de canción: lanzar radio y precargar siguiente
@@ -74,7 +81,10 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
         _query.value = q
         // Si se borra el texto, también se borran los resultados para que
         // no queden resultados viejos con el buscador vacío
-        if (q.isBlank()) _results.value = emptyList()
+        if (q.isBlank()) {
+            _results.value = emptyList()
+            _suggestedArtist.value = null
+        }
     }
 
     fun search() {
@@ -82,7 +92,10 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
         if (q.isBlank() || _searching.value) return
         viewModelScope.launch(Dispatchers.IO) {
             _searching.value = true
-            try { _results.value = YoutubeRepository.search(q) }
+            try {
+                _results.value = YoutubeRepository.search(q)
+                _suggestedArtist.value = computeSuggestedArtist(_results.value, q)
+            }
             catch (_: Exception) { /* mantener resultados anteriores si falla la red */ }
             finally { _searching.value = false }
         }
@@ -137,9 +150,30 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
     fun clearSearch() {
         _query.value = ""
         _results.value = emptyList()
+        _suggestedArtist.value = null
         viewModelScope.launch(Dispatchers.IO) {
             YoutubeRepository.clearLastSearch()
         }
+    }
+
+    /* Artista sugerido para la tarjeta "Ver artista": el artista de los
+       resultados de búsqueda. Se resuelve por el campo artista (no por
+       el nombre de una canción): si la búsqueda coincide con un artista,
+       es ese; si no, el artista más frecuente entre los resultados. */
+    private fun computeSuggestedArtist(results: List<YoutubeSearchResult>, query: String): String? {
+        if (results.isEmpty()) return null
+        val q = normalizeForMatch(query)
+        val byArtist = results.groupBy { it.artist.trim() }.filterKeys { it.isNotBlank() }
+        if (byArtist.isEmpty()) return null
+        // 1. Un artista cuyo nombre coincide con la búsqueda
+        val exact = byArtist.keys.firstOrNull { a ->
+            val an = normalizeForMatch(a)
+            an.isNotBlank() && (an == q || q.contains(an) || an.contains(q))
+        }
+        if (exact != null) return exact
+        // 2. El artista más frecuente, solo si se repite o es el único
+        val (top, list) = byArtist.maxByOrNull { it.value.size } ?: return null
+        return if (list.size >= 2 || byArtist.size == 1) top else null
     }
 
     // ── Radio ──────────────────────────────────────────────────────────────────
