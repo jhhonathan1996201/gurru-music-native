@@ -32,10 +32,27 @@ android {
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
+    /* Firma release con la llave estable guardada en los secretos de
+       GitHub (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD).
+       El workflow decodifica la llave a release.keystore y pone las claves
+       por entorno. Sin llave (build local), el release no se firma aquí. */
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("KEYSTORE_PATH") ?: "release.keystore")
+            storePassword System.getenv("KEYSTORE_PASSWORD")
+            keyAlias System.getenv("KEY_ALIAS")
+            keyPassword System.getenv("KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Solo firma release si la llave está presente (en GitHub sí).
+            if (System.getenv("KEYSTORE_PATH") != null) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 
