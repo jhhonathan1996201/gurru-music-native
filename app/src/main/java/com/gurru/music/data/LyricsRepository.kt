@@ -122,7 +122,7 @@ object LyricsRepository {
 
     // ── YouTube Music InnerTube Lyrics ─────────────────────────────────────────
 
-    private fun fetchYouTubeMusicLyrics(youtubeId: String?, title: String, artist: String): LyricsData? {
+    private suspend fun fetchYouTubeMusicLyrics(youtubeId: String?, title: String, artist: String): LyricsData? {
         return try {
             var vid = youtubeId
             if (vid.isNullOrBlank()) {
@@ -207,7 +207,7 @@ object LyricsRepository {
         }
     }
 
-    private fun findYouTubeIdForTrack(title: String, artist: String): String? {
+    private suspend fun findYouTubeIdForTrack(title: String, artist: String): String? {
         return try {
             val results = YoutubeRepository.search("$artist $title")
             results.firstOrNull()?.videoId
