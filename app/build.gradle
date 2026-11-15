@@ -80,8 +80,7 @@ dependencies {
     // Ajustes: guardar el tema de color elegido (DataStore Preferences).
     implementation 'androidx.datastore:datastore-preferences:1.1.7'
 
-    // FASE 3: YouTube online — extracción de streams sin API key (misma lib de la app NewPipe).
-    implementation 'com.github.TeamNewPipe:NewPipeExtractor:v0.24.4'
+    // FASE 3: YouTube online (InnerTube API nativo con cliente VISIONOS)
     // HLS: YouTube a veces devuelve streams HLS; ExoPlayer necesita este módulo extra.
     implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'
 
