@@ -3,8 +3,9 @@ package com.gurru.music
 import android.app.Application
 import android.content.ContentValues
 import android.provider.MediaStore
-import com.gurru.music.player.PlayerManager
+import com.gurru.music.data.DownloadRepository
 import com.gurru.music.data.YoutubeRepository
+import com.gurru.music.player.PlayerManager
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.util.Date
@@ -20,6 +21,7 @@ class GurruApplication : Application() {
         installCrashLog()
         PlayerManager.init(this)
         YoutubeRepository.init(this)   // Fase 3: YouTube online
+        DownloadRepository.init(this)  // Descargas online
     }
 
     private fun installCrashLog() {

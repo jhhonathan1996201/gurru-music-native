@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -36,6 +38,9 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import com.gurru.music.data.DownloadStatus
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,12 +60,12 @@ import com.gurru.music.ui.theme.GurruBackground
 import com.gurru.music.ui.theme.GurruRowBackground
 import com.gurru.music.ui.theme.LocalGurruTheme
 
-/* Pestaña YouTube: búsqueda de música en línea, radio automática y
-   reproducción con estado "Preparando…". Sin botón de descarga por fila
-   (las descargas son Fase 2, separada). */
+/* Pestaña YouTube: búsqueda de música en línea, radio automática,
+   reproducción con estado "Preparando…" y botón de descarga por canción. */
 @Composable
 fun YoutubeScreen(
     viewModel: YoutubeViewModel,
+    downloadsViewModel: DownloadsViewModel? = null,
     onOpenPlayer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -70,6 +75,15 @@ fun YoutubeScreen(
     val searching   by viewModel.searching.collectAsState()
     val prepState   by viewModel.prepareState.collectAsState()
     val recents     by viewModel.recents.collectAsState()
+
+    val downloads by downloadsViewModel?.downloads?.collectAsState() ?: remember { mutableStateOf(emptyList()) }
+    val activeDownloads = remember(downloads) {
+        downloads.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PREPARING }
+            .associate { it.videoId to it.progress }
+    }
+    val completedIds = remember(downloads) {
+        downloads.filter { it.status == DownloadStatus.COMPLETED }.map { it.videoId }.toSet()
+    }
 
     // Atrás borra la búsqueda (si hay una activa) en vez de salir
     BackHandler(enabled = query.isNotBlank() || results.isNotEmpty()) {
@@ -162,10 +176,13 @@ fun YoutubeScreen(
                 if (results.isNotEmpty()) {
                     items(results, key = { it.videoId }) { result ->
                         YoutubeTrackRow(
-                            result  = result,
-                            onClick = {
+                            result           = result,
+                            onClick          = {
                                 viewModel.play(result, fromSearch = true, onOpenPlayer = onOpenPlayer)
-                            }
+                            },
+                            onDownload       = downloadsViewModel?.let { vm -> { vm.startDownload(result) } },
+                            downloadProgress = activeDownloads[result.videoId],
+                            isDownloaded     = completedIds.contains(result.videoId)
                         )
                     }
                 } else if (query.isBlank()) {
@@ -215,11 +232,14 @@ fun YoutubeScreen(
                     }
                     items(recents, key = { "rec-${it.videoId}" }) { result ->
                         YoutubeTrackRow(
-                            result  = result,
-                            onClick = {
+                            result           = result,
+                            onClick          = {
                                 // Los recientes NO se vuelven a agregar a recientes
                                 viewModel.play(result, fromSearch = false, onOpenPlayer = onOpenPlayer)
-                            }
+                            },
+                            onDownload       = downloadsViewModel?.let { vm -> { vm.startDownload(result) } },
+                            downloadProgress = activeDownloads[result.videoId],
+                            isDownloaded     = completedIds.contains(result.videoId)
                         )
                     }
                 }
@@ -320,12 +340,14 @@ fun YoutubeScreen(
 
 // ── Fila de resultado de YouTube ──────────────────────────────────────────────
 
-/* Muestra: thumbnail 52×52, título (cian si suena), artista · duración.
-   Sin botón de descarga (Fase 2). */
+/* Muestra: thumbnail 52×52, título, artista · duración y botón de descarga. */
 @Composable
 private fun YoutubeTrackRow(
     result: YoutubeSearchResult,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDownload: (() -> Unit)? = null,
+    downloadProgress: Int? = null,
+    isDownloaded: Boolean = false
 ) {
     val theme = LocalGurruTheme.current
     Row(
@@ -367,6 +389,63 @@ private fun YoutubeTrackRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+
+        // ── Botón de descarga ──────────────────────────────────────────
+        if (onDownload != null) {
+            when {
+                downloadProgress != null -> {
+                    // Descargando: círculo de progreso con porcentaje
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            progress = { (downloadProgress / 100f).coerceIn(0f, 1f) },
+                            color = theme.accent,
+                            strokeWidth = 2.5.dp,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = "$downloadProgress",
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+                isDownloaded -> {
+                    // Ya descargada en el teléfono
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Descargada",
+                            tint = Color(0xFF00E676),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+                else -> {
+                    // Lista para descargar
+                    IconButton(
+                        onClick = onDownload,
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Descargar",
+                            tint = theme.soft,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 }

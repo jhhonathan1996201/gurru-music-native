@@ -21,6 +21,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.gurru.music.player.PlayerViewModel
 import com.gurru.music.ui.ComingSoonScreen
+import com.gurru.music.ui.DownloadsScreen
+import com.gurru.music.ui.DownloadsViewModel
 import com.gurru.music.ui.LibraryScreen
 import com.gurru.music.ui.MixesScreen
 import com.gurru.music.ui.PlayerScreen
@@ -49,6 +51,7 @@ fun GurruApp() {
     val playerViewModel: PlayerViewModel   = viewModel()
     val settingsViewModel: SettingsViewModel = viewModel()
     val youtubeViewModel: YoutubeViewModel = viewModel()   // Fase 3
+    val downloadsViewModel: DownloadsViewModel = viewModel() // Descargas
 
     val currentTheme by settingsViewModel.theme.collectAsState()
     val navController = rememberNavController()
@@ -63,11 +66,11 @@ fun GurruApp() {
         route == "settings"                     -> BottomSection.SETTINGS
         route == "mixes"                        -> BottomSection.MIXES
         route == "youtube"                      -> BottomSection.YOUTUBE   // Fase 3
+        route == "downloads"                    -> BottomSection.DOWNLOADS // Descargas
 
         route?.startsWith("coming/") == true -> when (
             backStackEntry?.arguments?.getString("section")
         ) {
-            "Descargas" -> BottomSection.DOWNLOADS
             "Mezclas"   -> BottomSection.MIXES
             else        -> BottomSection.LIBRARY
         }
@@ -110,7 +113,15 @@ fun GurruApp() {
                     // ── Fase 3: YouTube online ──────────────────────────────
                     composable("youtube") {
                         YoutubeScreen(
-                            viewModel    = youtubeViewModel,
+                            viewModel          = youtubeViewModel,
+                            downloadsViewModel = downloadsViewModel,
+                            onOpenPlayer       = { navController.navigate("player") }
+                        )
+                    }
+                    // ── Pestaña Descargas ────────────────────────────────────
+                    composable("downloads") {
+                        DownloadsScreen(
+                            viewModel    = downloadsViewModel,
                             onOpenPlayer = { navController.navigate("player") }
                         )
                     }
@@ -146,6 +157,11 @@ fun GurruApp() {
                                 launchSingleTop = true
                             }
                             BottomSection.MIXES -> navController.navigate("mixes") {
+                                popUpTo("library") { inclusive = false }
+                                launchSingleTop = true
+                            }
+                            // ── Pestaña Descargas ──────────────────────────
+                            BottomSection.DOWNLOADS -> navController.navigate("downloads") {
                                 popUpTo("library") { inclusive = false }
                                 launchSingleTop = true
                             }
