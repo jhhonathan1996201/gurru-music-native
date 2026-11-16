@@ -218,11 +218,28 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
                 val related = YoutubeRepository.getRelated(videoId)
                 if (related.isEmpty()) return@launch
 
+                // Filtrar canciones que ya están en la cola actual o repetidas en la lista
+                val currentQueue = PlayerManager.queue.value
+                val existingYtIds = currentQueue.mapNotNullTo(HashSet()) { it.youtubeId }
+                val existingTitles = currentQueue.mapTo(HashSet()) {
+                    "${normalizeForMatch(it.artist)}|${normalizeForMatch(it.title)}"
+                }
+                val seenInBatch = HashSet<String>()
+                val fresh = related.filter { r ->
+                    val titleKey = "${normalizeForMatch(r.artist)}|${normalizeForMatch(r.title)}"
+                    r.videoId !in existingYtIds &&
+                        titleKey !in existingTitles &&
+                        seenInBatch.add(r.videoId) &&
+                        seenInBatch.add(titleKey)
+                }.take(6)
+
+                if (fresh.isEmpty()) return@launch
+
                 // Precargar la primera en background (el usuario ya está oyendo la actual)
-                related.firstOrNull()?.let { YoutubeRepository.prefetch(it.videoId) }
+                fresh.firstOrNull()?.let { YoutubeRepository.prefetch(it.videoId) }
 
                 // Resolver y agregar cada track relacionado a la cola
-                related.take(6).forEach { result ->
+                fresh.forEach { result ->
                     launch(Dispatchers.IO) {
                         try {
                             val url   = YoutubeRepository.getStreamUrl(result.videoId)

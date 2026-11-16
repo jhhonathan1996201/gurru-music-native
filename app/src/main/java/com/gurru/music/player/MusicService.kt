@@ -1,7 +1,10 @@
 package com.gurru.music.player
 
 import android.os.Bundle
+import androidx.annotation.OptIn
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -13,11 +16,10 @@ import com.google.common.util.concurrent.ListenableFuture
 /* Servicio en primer plano (Media3) que publica la sesión de Gurru
    Music: notificación con controles, pantalla de bloqueo y Bluetooth,
    y la música sigue sonando con la pantalla apagada o fuera de la app.
-   No reproduce por sí mismo: el audio lo lleva el ExoPlayer compartido
-   de PlayerManager. Las acciones de la notificación (anterior,
-   play/pausa, siguiente, detener) llegan aquí y se delegan a
-   PlayerManager, para que el comportamiento sea el mismo que en la
-   interfaz (aleatorio, repetir, reiniciar si lleva más de 3 s). */
+   Envuelve el ExoPlayer compartido en un ForwardingPlayer para anunciar
+   siempre los comandos de Siguiente/Anterior (ya que ExoPlayer solo
+   carga 1 pista a la vez mientras PlayerManager gestiona la cola). */
+@OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
 
     private var session: MediaSession? = null
@@ -25,19 +27,67 @@ class MusicService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         PlayerManager.init(applicationContext)
+        val forwardingPlayer = object : ForwardingPlayer(PlayerManager.player) {
+            override fun getAvailableCommands(): Player.Commands {
+                return super.getAvailableCommands().buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build()
+            }
+
+            override fun isCommandAvailable(command: Int): Boolean {
+                return when (command) {
+                    Player.COMMAND_SEEK_TO_NEXT,
+                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                    Player.COMMAND_SEEK_TO_PREVIOUS,
+                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> true
+                    else -> super.isCommandAvailable(command)
+                }
+            }
+
+            override fun hasNextMediaItem(): Boolean = true
+
+            override fun hasPreviousMediaItem(): Boolean = true
+
+            override fun seekToNext() {
+                PlayerManager.next()
+            }
+
+            override fun seekToNextMediaItem() {
+                PlayerManager.next()
+            }
+
+            override fun seekToPrevious() {
+                PlayerManager.prev()
+            }
+
+            override fun seekToPreviousMediaItem() {
+                PlayerManager.prev()
+            }
+        }
+
         val callback = object : MediaSession.Callback {
-            /* En Media3 1.4.1 el Callback NO tiene onSkipToNext /
-               onSkipToPrevious / onSeekTo / onStop: todos los comandos
-               del reproductor llegan por onPlayerCommandRequest. Si se
-               devuelve algo distinto de RESULT_SUCCESS, la sesión NO
-               ejecuta el comando en el reproductor (verificado en el
-               código fuente de media3-session 1.4.1: MediaSessionStub,
-               "Don't run rejected command"). Por eso los comandos de
-               siguiente/anterior/play-pausa/detener se delegan a
-               PlayerManager (aleatorio, repetir, reinicio de 3 s) y se
-               devuelve RESULT_INFO_SKIPPED; el resto (buscar/seek, que
-               la sesión ejecuta sola en el reproductor compartido con
-               la posición que trae el comando) devuelve SUCCESS. */
+            override fun onConnect(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo
+            ): MediaSession.ConnectionResult {
+                val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                    .add(SessionCommand(ACTION_STOP, Bundle.EMPTY))
+                    .build()
+                val playerCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build()
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                    .setAvailableSessionCommands(sessionCommands)
+                    .setAvailablePlayerCommands(playerCommands)
+                    .build()
+            }
+
             @Suppress("DEPRECATION")
             override fun onPlayerCommandRequest(
                 session: MediaSession,
@@ -77,7 +127,7 @@ class MusicService : MediaSessionService() {
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
         }
-        val builtSession = MediaSession.Builder(this, PlayerManager.player)
+        val builtSession = MediaSession.Builder(this, forwardingPlayer)
             .setCallback(callback)
             .build()
         session = builtSession

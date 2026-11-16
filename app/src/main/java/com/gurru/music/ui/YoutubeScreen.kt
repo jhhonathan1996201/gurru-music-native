@@ -20,11 +20,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Person
@@ -49,8 +51,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -121,29 +125,56 @@ fun YoutubeScreen(
                         .shadow(12.dp, RoundedCornerShape(12.dp))
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                TextField(
-                    value = query,
-                    onValueChange = { viewModel.setQuery(it) },
-                    placeholder = {
-                        Text("Buscar en YouTube", color = Color.White.copy(alpha = 0.6f))
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { viewModel.search() }),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor   = GurruRowBackground,
-                        unfocusedContainerColor = GurruRowBackground,
-                        focusedIndicatorColor   = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        focusedTextColor        = Color.White,
-                        unfocusedTextColor      = Color.White,
-                        cursorColor             = theme.accent
-                    ),
-                    shape    = RoundedCornerShape(24.dp),
+                Row(
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
-                )
+                        .height(46.dp)
+                        .clip(RoundedCornerShape(23.dp))
+                        .background(GurruRowBackground)
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = "Buscar en YouTube",
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 15.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        BasicTextField(
+                            value = query,
+                            onValueChange = { viewModel.setQuery(it) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { viewModel.search() }),
+                            textStyle = TextStyle(
+                                color = Color.White,
+                                fontSize = 15.sp
+                            ),
+                            cursorBrush = SolidColor(theme.accent),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (query.isNotEmpty()) {
+                        IconButton(
+                            onClick = { viewModel.clearSearch() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Borrar",
+                                tint = theme.soft,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(onClick = { viewModel.search() }) {
                     if (searching) {

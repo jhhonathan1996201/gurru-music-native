@@ -25,8 +25,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -48,9 +50,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -143,26 +147,61 @@ fun LibraryScreen(
                     .shadow(12.dp, RoundedCornerShape(12.dp))
             )
             Spacer(modifier = Modifier.width(10.dp))
-            TextField(
-                value = query,
-                onValueChange = { viewModel.setQuery(it) },
-                placeholder = { Text("Buscar", color = theme.soft.copy(alpha = 0.7f)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = theme.soft) },
-                singleLine = true,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = GurruRowBackground,
-                    unfocusedContainerColor = GurruRowBackground,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    cursorColor = theme.accent
-                ),
-                shape = RoundedCornerShape(24.dp),
+            Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(48.dp)
-            )
+                    .height(46.dp)
+                    .clip(RoundedCornerShape(23.dp))
+                    .background(GurruRowBackground)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = theme.soft,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = "Buscar",
+                            color = theme.soft.copy(alpha = 0.7f),
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = { viewModel.setQuery(it) },
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            color = Color.White,
+                            fontSize = 15.sp
+                        ),
+                        cursorBrush = SolidColor(theme.accent),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                if (query.isNotEmpty()) {
+                    IconButton(
+                        onClick = { viewModel.setQuery("") },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Borrar",
+                            tint = theme.soft,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
         }
 
         /* Sub-pestañas, con su línea inferior, como en la app actual. */

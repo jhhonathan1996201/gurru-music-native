@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.gurru.music.data.Track
 import com.gurru.music.data.TrackOrigin
 import com.gurru.music.data.YoutubeRepository
+import com.gurru.music.data.normalizeForMatch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -124,12 +125,30 @@ object PlayerManager {
         loadAt(index)
     }
 
+    private val queueLock = Any()
+
     /* Agrega canciones al final de la cola actual sin interrumpir la
-       reproducción. Lo usa la radio de YouTube para extender la cola
-       conforme van resolviéndose las URLs de los tracks relacionados. */
+       reproducción y evitando duplicados por ID, youtubeId o título+artista. */
     fun appendToQueue(tracks: List<Track>) {
         if (tracks.isEmpty()) return
-        _queue.value = _queue.value + tracks
+        synchronized(queueLock) {
+            val current = _queue.value
+            val existingIds = current.mapTo(HashSet()) { it.id }
+            val existingYtIds = current.mapNotNullTo(HashSet()) { it.youtubeId }
+            val existingTitles = current.mapTo(HashSet()) {
+                "${normalizeForMatch(it.artist)}|${normalizeForMatch(it.title)}"
+            }
+
+            val unique = tracks.filter { t ->
+                val key = "${normalizeForMatch(t.artist)}|${normalizeForMatch(t.title)}"
+                t.id !in existingIds &&
+                    (t.youtubeId == null || t.youtubeId !in existingYtIds) &&
+                    key !in existingTitles
+            }
+            if (unique.isNotEmpty()) {
+                _queue.value = current + unique
+            }
+        }
     }
 
     /* Carga UNA sola canción en el reproductor y la pone a sonar.

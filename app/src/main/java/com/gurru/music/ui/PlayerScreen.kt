@@ -151,7 +151,7 @@ fun PlayerScreen(
            centran la portada y los controles, para que no queden
            pegados arriba con el hueco en medio. */
         if (!queueExpanded) {
-            Spacer(modifier = Modifier.weight(0.6f))
+            Spacer(modifier = Modifier.weight(0.9f))
         }
         Box(
             modifier = Modifier
@@ -162,8 +162,8 @@ fun PlayerScreen(
         ) {
             val viewModifier = Modifier
                 .then(
-                    if (queueExpanded) Modifier.size(260.dp)
-                    else Modifier.fillMaxWidth().aspectRatio(1f)
+                    if (queueExpanded) Modifier.size(240.dp)
+                    else Modifier.fillMaxWidth().padding(horizontal = 8.dp).aspectRatio(1f)
                 )
 
             if (showLyrics) {
@@ -201,6 +201,10 @@ fun PlayerScreen(
             }
         }
 
+        if (!queueExpanded) {
+            Spacer(modifier = Modifier.weight(0.7f))
+        }
+
         Text(
             text = track?.artist ?: "Sin música todavía",
             fontSize = 15.sp,
@@ -211,7 +215,7 @@ fun PlayerScreen(
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 20.dp)
+                .padding(top = if (queueExpanded) 12.dp else 8.dp)
         )
         Text(
             text = track?.title ?: "Elige una canción",
@@ -502,13 +506,13 @@ fun PlayerScreen(
         }
 
         if (!queueExpanded) {
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.weight(0.25f))
         }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { queueExpanded = !queueExpanded }
-                .padding(top = 20.dp, bottom = 4.dp),
+                .padding(top = 10.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
