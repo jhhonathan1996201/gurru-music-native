@@ -103,6 +103,8 @@ fun PlayerScreen(
     val durationMs by viewModel.durationMs.collectAsState()
     val shuffle by viewModel.shuffle.collectAsState()
     val repeatMode by viewModel.repeatMode.collectAsState()
+    val mixMode by viewModel.mixMode.collectAsState()
+    val tempo by viewModel.tempo.collectAsState()
 
     val lyricsData by viewModel.lyricsData.collectAsState()
     val loadingLyrics by viewModel.loadingLyrics.collectAsState()
@@ -289,6 +291,60 @@ fun PlayerScreen(
             },
             modifier = Modifier.fillMaxWidth()
         )
+
+        /* ── Tempo del DJ (solo en mezclas) ──
+           Acelera o frena la canción sin cambiarle el tono, para ir
+           emparejando las velocidades a oído. El porcentaje es el
+           cambio respecto a la velocidad normal (0% = normal). */
+        if (mixMode) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Tempo",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Slider(
+                    value = tempo,
+                    onValueChange = { viewModel.setTempo(it) },
+                    valueRange = 0.8f..1.2f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = theme.accent,
+                        activeTrackColor = theme.accent,
+                        inactiveTrackColor = theme.soft.copy(alpha = 0.3f)
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 10.dp)
+                )
+                val pct = ((tempo - 1f) * 100).toInt()
+                Text(
+                    text = (if (pct > 0) "+" else "") + pct.toString() + "%",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = theme.accent,
+                    modifier = Modifier.width(44.dp)
+                )
+                if (tempo != 1.0f) {
+                    Text(
+                        text = "0%",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = theme.soft,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(GurruRowBackground)
+                            .clickable { viewModel.setTempo(1.0f) }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
 
         /* ── Acciones: Letras / Carátula + Descargar (online) ──
            El botón de letra está aquí, junto a los controles, para que

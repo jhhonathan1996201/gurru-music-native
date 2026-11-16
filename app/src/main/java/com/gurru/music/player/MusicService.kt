@@ -5,6 +5,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -27,47 +28,6 @@ class MusicService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         PlayerManager.init(applicationContext)
-        val forwardingPlayer = object : ForwardingPlayer(PlayerManager.player) {
-            override fun getAvailableCommands(): Player.Commands {
-                return super.getAvailableCommands().buildUpon()
-                    .add(Player.COMMAND_SEEK_TO_NEXT)
-                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
-                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-                    .build()
-            }
-
-            override fun isCommandAvailable(command: Int): Boolean {
-                return when (command) {
-                    Player.COMMAND_SEEK_TO_NEXT,
-                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
-                    Player.COMMAND_SEEK_TO_PREVIOUS,
-                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> true
-                    else -> super.isCommandAvailable(command)
-                }
-            }
-
-            override fun hasNextMediaItem(): Boolean = true
-
-            override fun hasPreviousMediaItem(): Boolean = true
-
-            override fun seekToNext() {
-                PlayerManager.next()
-            }
-
-            override fun seekToNextMediaItem() {
-                PlayerManager.next()
-            }
-
-            override fun seekToPrevious() {
-                PlayerManager.prev()
-            }
-
-            override fun seekToPreviousMediaItem() {
-                PlayerManager.prev()
-            }
-        }
-
         val callback = object : MediaSession.Callback {
             override fun onConnect(
                 session: MediaSession,
@@ -127,10 +87,17 @@ class MusicService : MediaSessionService() {
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
         }
-        val builtSession = MediaSession.Builder(this, forwardingPlayer)
+        val builtSession = MediaSession.Builder(this, makeForwardingPlayer(PlayerManager.player))
             .setCallback(callback)
             .build()
         session = builtSession
+        /* Cuando el crossfade cambia el reproductor principal, la sesión
+           sigue al nuevo para que la notificación muestre la canción que
+           suena. Los dos reproductores usan el looper principal, que es
+           lo que pide setPlayer. */
+        PlayerManager.onActivePlayerChanged = { exo ->
+            try { session?.setPlayer(makeForwardingPlayer(exo)) } catch (_: Exception) { }
+        }
         /* Botón "Detener" en la notificación (la MediaSession de
            Media3 ya trae anterior / play-pausa / siguiente). */
         builtSession.setCustomLayout(
@@ -150,6 +117,53 @@ class MusicService : MediaSessionService() {
            sesión registrada, la notificación aparece y el servicio
            pasa a primer plano en cuanto suena la música. */
         addSession(builtSession)
+    }
+
+    /* Envuelve un ExoPlayer para anunciar siempre Siguiente/Anterior
+       (ExoPlayer solo carga 1 pista a la vez mientras PlayerManager
+       gestiona la cola). Se crea uno nuevo cada vez que el crossfade
+       cambia el reproductor principal, para que la sesión lo siga. */
+    private fun makeForwardingPlayer(exo: ExoPlayer): ForwardingPlayer {
+        return object : ForwardingPlayer(exo) {
+            override fun getAvailableCommands(): Player.Commands {
+                return super.getAvailableCommands().buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build()
+            }
+
+            override fun isCommandAvailable(command: Int): Boolean {
+                return when (command) {
+                    Player.COMMAND_SEEK_TO_NEXT,
+                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                    Player.COMMAND_SEEK_TO_PREVIOUS,
+                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> true
+                    else -> super.isCommandAvailable(command)
+                }
+            }
+
+            override fun hasNextMediaItem(): Boolean = true
+
+            override fun hasPreviousMediaItem(): Boolean = true
+
+            override fun seekToNext() {
+                PlayerManager.next()
+            }
+
+            override fun seekToNextMediaItem() {
+                PlayerManager.next()
+            }
+
+            override fun seekToPrevious() {
+                PlayerManager.prev()
+            }
+
+            override fun seekToPreviousMediaItem() {
+                PlayerManager.prev()
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session

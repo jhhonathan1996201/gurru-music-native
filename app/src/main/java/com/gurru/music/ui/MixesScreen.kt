@@ -18,6 +18,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -39,6 +43,7 @@ import com.gurru.music.R
 import com.gurru.music.data.Mix
 import com.gurru.music.data.PlayCountRepository
 import com.gurru.music.data.Shortcut
+import com.gurru.music.data.UserMix
 import com.gurru.music.data.buildMixes
 import com.gurru.music.data.buildShortcuts
 import com.gurru.music.player.PlayerViewModel
@@ -52,7 +57,10 @@ import com.gurru.music.ui.theme.LocalGurruTheme
 @Composable
 fun MixesScreen(
     viewModel: PlayerViewModel,
+    mixesViewModel: UserMixesViewModel,
     onOpenPlayer: () -> Unit,
+    onCreateMix: () -> Unit,
+    onEditMix: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val theme = LocalGurruTheme.current
@@ -63,6 +71,14 @@ fun MixesScreen(
 
     val mixes = remember(tracks, counts) { buildMixes(tracks, counts) }
     val shortcuts = remember(tracks, counts) { buildShortcuts(tracks, counts) }
+    val userMixes by mixesViewModel.mixes.collectAsState()
+    /* Las mezclas del usuario resueltas a canciones de la biblioteca. */
+    val resolvedMixes = remember(userMixes, tracks) {
+        userMixes.mapNotNull { um ->
+            val ts = um.trackIds.mapNotNull { id -> tracks.find { it.id == id } }
+            if (ts.isEmpty()) null else um to ts
+        }
+    }
 
     LazyColumn(
         modifier = modifier
@@ -87,6 +103,50 @@ fun MixesScreen(
                         fontSize = 14.sp
                     )
                 }
+            }
+        }
+        item {
+            /* Crear mezcla (auto-DJ): armar una lista de canciones
+               locales que suena de corrido con crossfade y tempo. */
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(theme.accent)
+                    .clickable { onCreateMix() }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "+  Crear mezcla",
+                    color = GurruBackground,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        if (resolvedMixes.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Mis mezclas",
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            items(resolvedMixes) { (userMix, mixTracks) ->
+                UserMixRow(
+                    userMix = userMix,
+                    trackCount = mixTracks.size,
+                    cover = mixTracks.firstOrNull { it.artUri != null }?.artUri,
+                    onClick = {
+                        viewModel.playUserMix(mixTracks, userMix.crossfadeSec)
+                        onOpenPlayer()
+                    },
+                    onEdit = { onEditMix(userMix.id) },
+                    onDelete = { mixesViewModel.deleteMix(userMix.id) }
+                )
             }
         }
         if (mixes.isEmpty()) {
@@ -223,5 +283,74 @@ private fun ShortcutCard(shortcut: Shortcut, onClick: () -> Unit) {
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/* Una mezcla creada por el usuario: portada, nombre, cuántas
+   canciones y el crossfade; tocarla la suena con crossfade y tempo.
+   El lápiz la edita y la papelera la borra. */
+@Composable
+private fun UserMixRow(
+    userMix: UserMix,
+    trackCount: Int,
+    cover: String?,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val theme = LocalGurruTheme.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(GurruRowBackground)
+            .clickable { onClick() }
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = cover ?: R.drawable.logo,
+            contentDescription = userMix.name,
+            placeholder = painterResource(R.drawable.logo),
+            error = painterResource(R.drawable.logo),
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = userMix.name,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "$trackCount ${if (trackCount == 1) "canción" else "canciones"} · crossfade ${userMix.crossfadeSec}s",
+                color = theme.soft,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = "Editar",
+                tint = theme.soft,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Borrar",
+                tint = theme.soft,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }

@@ -32,6 +32,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val durationMs = PlayerManager.durationMs
     val shuffle = PlayerManager.shuffle
     val repeatMode = PlayerManager.repeatMode
+    val mixMode = PlayerManager.mixMode
+    val tempo = PlayerManager.tempo
 
     private val _tracks = MutableStateFlow<List<Track>>(emptyList())
     val tracks: StateFlow<List<Track>> = _tracks.asStateFlow()
@@ -178,4 +180,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun seekTo(positionMs: Long) = PlayerManager.seekTo(positionMs)
     fun toggleShuffle() = PlayerManager.toggleShuffle()
     fun cycleRepeat() = PlayerManager.cycleRepeat()
+    fun playUserMix(tracks: List<Track>, crossfadeSec: Int) = PlayerManager.playUserMix(tracks, crossfadeSec)
+    fun setTempo(speed: Float) = PlayerManager.setTempo(speed)
 }

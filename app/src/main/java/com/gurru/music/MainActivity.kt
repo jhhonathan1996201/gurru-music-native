@@ -27,10 +27,12 @@ import com.gurru.music.ui.ComingSoonScreen
 import com.gurru.music.ui.DownloadsScreen
 import com.gurru.music.ui.DownloadsViewModel
 import com.gurru.music.ui.LibraryScreen
+import com.gurru.music.ui.MixEditorScreen
 import com.gurru.music.ui.MixesScreen
 import com.gurru.music.ui.PlayerScreen
 import com.gurru.music.ui.SettingsScreen
 import com.gurru.music.ui.SettingsViewModel
+import com.gurru.music.ui.UserMixesViewModel
 import com.gurru.music.ui.YoutubeScreen
 import com.gurru.music.ui.YoutubeViewModel
 import com.gurru.music.ui.components.BottomBar
@@ -56,6 +58,7 @@ fun GurruApp() {
     val youtubeViewModel: YoutubeViewModel = viewModel()   // Fase 3
     val downloadsViewModel: DownloadsViewModel = viewModel() // Descargas
     val artistViewModel: ArtistViewModel = viewModel()       // Fase 4
+    val userMixesViewModel: UserMixesViewModel = viewModel() // Mezclas de usuario (auto-DJ)
 
     val currentTheme by settingsViewModel.theme.collectAsState()
     val navController = rememberNavController()
@@ -68,7 +71,7 @@ fun GurruApp() {
     val selectedSection = when {
         route == "library" || route == "player" -> BottomSection.LIBRARY
         route == "settings"                     -> BottomSection.SETTINGS
-        route == "mixes"                        -> BottomSection.MIXES
+        route == "mixes" || route == "mixEditor" || route?.startsWith("mixEditor/") == true -> BottomSection.MIXES
         route == "youtube"                      -> BottomSection.YOUTUBE   // Fase 3
         route == "downloads"                    -> BottomSection.DOWNLOADS // Descargas
         route?.startsWith("artist/") == true    -> BottomSection.YOUTUBE   // Fase 4
@@ -117,8 +120,33 @@ fun GurruApp() {
                     }
                     composable("mixes") {
                         MixesScreen(
-                            viewModel    = playerViewModel,
-                            onOpenPlayer = { navController.navigate("player") }
+                            viewModel      = playerViewModel,
+                            mixesViewModel = userMixesViewModel,
+                            onOpenPlayer   = { navController.navigate("player") },
+                            onCreateMix    = { navController.navigate("mixEditor") },
+                            onEditMix      = { id -> navController.navigate("mixEditor/$id") }
+                        )
+                    }
+                    // ── Editor de mezclas (auto-DJ) ──────────────────────
+                    composable("mixEditor") {
+                        MixEditorScreen(
+                            playerViewModel = playerViewModel,
+                            mixesViewModel  = userMixesViewModel,
+                            mixId           = null,
+                            onDone          = { navController.popBackStack() },
+                            onBack          = { navController.popBackStack() }
+                        )
+                    }
+                    composable(
+                        "mixEditor/{mixId}",
+                        arguments = listOf(navArgument("mixId") { type = NavType.StringType })
+                    ) { entry ->
+                        MixEditorScreen(
+                            playerViewModel = playerViewModel,
+                            mixesViewModel  = userMixesViewModel,
+                            mixId           = entry.arguments?.getString("mixId"),
+                            onDone          = { navController.popBackStack() },
+                            onBack          = { navController.popBackStack() }
                         )
                     }
                     // ── Fase 3: YouTube online ──────────────────────────────
