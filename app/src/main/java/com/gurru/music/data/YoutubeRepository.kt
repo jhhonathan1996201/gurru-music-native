@@ -99,6 +99,285 @@ object YoutubeRepository {
         }
     }
 
+    /* Busca información oficial del artista (nombre, foto HD, oyentes/subtítulo, browseId)
+       a través de la InnerTube API de YouTube Music. */
+    suspend fun getArtistInfo(artistName: String): ArtistCardData? = withContext(Dispatchers.IO) {
+        val trimmed = artistName.trim()
+        if (trimmed.isEmpty()) return@withContext null
+        try {
+            val endpoint = "https://music.youtube.com/youtubei/v1/search"
+            val visitor = cachedVisitorData ?: fetchVisitorData()
+
+            val body = JSONObject().apply {
+                put("context", JSONObject().apply {
+                    put("client", JSONObject().apply {
+                        put("clientName", "WEB_REMIX")
+                        put("clientVersion", "1.20241104.01.00")
+                        put("hl", "es")
+                        put("gl", "US")
+                        if (!visitor.isNullOrBlank()) {
+                            put("visitorData", visitor)
+                        }
+                    })
+                })
+                put("query", trimmed)
+            }
+
+            val jsonResponse = postJson(
+                urlStr = endpoint,
+                jsonBody = body.toString(),
+                userAgent = USER_AGENT_WEB,
+                headers = mapOf(
+                    "Origin" to "https://music.youtube.com",
+                    "Referer" to "https://music.youtube.com/"
+                )
+            )
+
+            val root = JSONObject(jsonResponse)
+            val tabs = root.optJSONObject("contents")
+                ?.optJSONObject("tabbedSearchResultsRenderer")
+                ?.optJSONArray("tabs") ?: return@withContext null
+
+            val tabRenderer = tabs.optJSONObject(0)?.optJSONObject("tabRenderer")
+            val sections = tabRenderer?.optJSONObject("content")
+                ?.optJSONObject("sectionListRenderer")
+                ?.optJSONArray("contents") ?: return@withContext null
+
+            for (i in 0 until sections.length()) {
+                val sec = sections.getJSONObject(i)
+                val card = sec.optJSONObject("musicCardShelfRenderer") ?: continue
+
+                val titleRun = card.optJSONObject("title")?.optJSONArray("runs")?.optJSONObject(0)
+                val name = titleRun?.optString("text")?.trim() ?: continue
+                val nav = titleRun.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")
+                val browseId = nav?.optString("browseId")
+
+                val subRuns = card.optJSONObject("subtitle")?.optJSONArray("runs")
+                val subText = if (subRuns != null) {
+                    val sb = StringBuilder()
+                    for (k in 0 until subRuns.length()) {
+                        sb.append(subRuns.getJSONObject(k).optString("text"))
+                    }
+                    sb.toString().trim()
+                } else null
+
+                val thumbs = card.optJSONObject("thumbnail")
+                    ?.optJSONObject("musicThumbnailRenderer")
+                    ?.optJSONObject("thumbnail")
+                    ?.optJSONArray("thumbnails")
+                val rawThumb = if (thumbs != null && thumbs.length() > 0) {
+                    thumbs.getJSONObject(thumbs.length() - 1).optString("url")
+                } else null
+                val imgUrl = rawThumb?.let { optimizeThumbnailUrl(it) }
+
+                return@withContext ArtistCardData(
+                    name = name,
+                    imageUrl = imgUrl,
+                    subtitle = subText,
+                    browseId = browseId
+                )
+            }
+
+            for (i in 0 until sections.length()) {
+                val sec = sections.getJSONObject(i)
+                val shelf = sec.optJSONObject("musicShelfRenderer") ?: continue
+                val items = shelf.optJSONArray("contents") ?: continue
+                if (items.length() > 0) {
+                    val firstItem = items.getJSONObject(0).optJSONObject("musicResponsiveListItemRenderer") ?: continue
+                    val flex = firstItem.optJSONArray("flexColumns") ?: continue
+                    if (flex.length() >= 2) {
+                        val runs = flex.getJSONObject(1)
+                            .optJSONObject("musicResponsiveListItemFlexColumnRenderer")
+                            ?.optJSONObject("text")
+                            ?.optJSONArray("runs")
+                        if (runs != null && runs.length() > 0) {
+                            val r = runs.getJSONObject(0)
+                            val artName = r.optString("text")
+                            val bId = r.optJSONObject("navigationEndpoint")
+                                ?.optJSONObject("browseEndpoint")?.optString("browseId")
+                            val thumb = extractThumbnailUrl(firstItem)
+                            if (bId != null && bId.startsWith("UC")) {
+                                return@withContext ArtistCardData(
+                                    name = artName,
+                                    imageUrl = thumb,
+                                    subtitle = "Artista",
+                                    browseId = bId
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /* Obtiene las canciones más escuchadas del artista (Top 10) usando
+       la emisora/playlist oficial del artista en YouTube Music.
+       Si no tiene suficientes, complementa con el Top de iTunes. */
+    suspend fun getArtistTopSongs(artistName: String, browseId: String? = null): List<YoutubeSearchResult> = withContext(Dispatchers.IO) {
+        val trimmed = artistName.trim()
+        if (trimmed.isEmpty()) return@withContext emptyList()
+
+        val finalBrowseId = browseId ?: getArtistInfo(trimmed)?.browseId
+        val results = mutableListOf<YoutubeSearchResult>()
+
+        if (!finalBrowseId.isNullOrBlank()) {
+            try {
+                val visitor = cachedVisitorData ?: fetchVisitorData()
+                val body = JSONObject().apply {
+                    put("context", JSONObject().apply {
+                        put("client", JSONObject().apply {
+                            put("clientName", "WEB_REMIX")
+                            put("clientVersion", "1.20241104.01.00")
+                            put("hl", "es")
+                            put("gl", "US")
+                            if (!visitor.isNullOrBlank()) {
+                                put("visitorData", visitor)
+                            }
+                        })
+                    })
+                    put("browseId", finalBrowseId)
+                }
+
+                val jsonResponse = postJson(
+                    urlStr = "https://music.youtube.com/youtubei/v1/browse",
+                    jsonBody = body.toString(),
+                    userAgent = USER_AGENT_WEB,
+                    headers = mapOf(
+                        "Origin" to "https://music.youtube.com",
+                        "Referer" to "https://music.youtube.com/"
+                    )
+                )
+
+                val root = JSONObject(jsonResponse)
+                val sections = root.optJSONObject("contents")
+                    ?.optJSONObject("singleColumnBrowseResultsRenderer")
+                    ?.optJSONArray("tabs")?.optJSONObject(0)
+                    ?.optJSONObject("tabRenderer")
+                    ?.optJSONObject("content")
+                    ?.optJSONObject("sectionListRenderer")
+                    ?.optJSONArray("contents")
+
+                if (sections != null) {
+                    var topShelf: JSONObject? = null
+                    for (i in 0 until sections.length()) {
+                        val s = sections.getJSONObject(i).optJSONObject("musicShelfRenderer")
+                        if (s != null) {
+                            topShelf = s
+                            break
+                        }
+                    }
+
+                    if (topShelf != null) {
+                        val bottomBrowse = topShelf.optJSONObject("bottomEndpoint")
+                            ?.optJSONObject("browseEndpoint")
+                        val playlistBrowseId = bottomBrowse?.optString("browseId")
+                        val playlistParams = bottomBrowse?.optString("params")
+
+                        if (!playlistBrowseId.isNullOrBlank()) {
+                            try {
+                                val pBody = JSONObject().apply {
+                                    put("context", JSONObject().apply {
+                                        put("client", JSONObject().apply {
+                                            put("clientName", "WEB_REMIX")
+                                            put("clientVersion", "1.20241104.01.00")
+                                            put("hl", "es")
+                                            put("gl", "US")
+                                            if (!visitor.isNullOrBlank()) put("visitorData", visitor)
+                                        })
+                                    })
+                                    put("browseId", playlistBrowseId)
+                                    if (!playlistParams.isNullOrBlank()) put("params", playlistParams)
+                                }
+
+                                val pJson = postJson(
+                                    urlStr = "https://music.youtube.com/youtubei/v1/browse",
+                                    jsonBody = pBody.toString(),
+                                    userAgent = USER_AGENT_WEB,
+                                    headers = mapOf(
+                                        "Origin" to "https://music.youtube.com",
+                                        "Referer" to "https://music.youtube.com/"
+                                    )
+                                )
+
+                                val pRoot = JSONObject(pJson)
+                                val pItems = pRoot.optJSONObject("contents")
+                                    ?.optJSONObject("singleColumnBrowseResultsRenderer")
+                                    ?.optJSONArray("tabs")?.optJSONObject(0)
+                                    ?.optJSONObject("tabRenderer")
+                                    ?.optJSONObject("content")
+                                    ?.optJSONObject("sectionListRenderer")
+                                    ?.optJSONArray("contents")?.optJSONObject(0)
+                                    ?.optJSONObject("musicPlaylistShelfRenderer")
+                                    ?.optJSONArray("contents")
+
+                                if (pItems != null) {
+                                    for (j in 0 until pItems.length()) {
+                                        if (results.size >= 10) break
+                                        val item = pItems.getJSONObject(j).optJSONObject("musicResponsiveListItemRenderer") ?: continue
+                                        val parsed = parseMusicListItem(item, defaultArtist = trimmed)
+                                        if (parsed != null) results.add(parsed)
+                                    }
+                                }
+                            } catch (_: Exception) { }
+                        }
+
+                        if (results.isEmpty()) {
+                            val items = topShelf.optJSONArray("contents")
+                            if (items != null) {
+                                for (j in 0 until items.length()) {
+                                    if (results.size >= 10) break
+                                    val item = items.getJSONObject(j).optJSONObject("musicResponsiveListItemRenderer") ?: continue
+                                    val parsed = parseMusicListItem(item, defaultArtist = trimmed)
+                                    if (parsed != null) results.add(parsed)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) { }
+        }
+
+        if (results.size >= 10) {
+            return@withContext results.take(10)
+        }
+
+        try {
+            val itunesTop = ArtistRepository.getTopSongsFromItunes(trimmed)
+            for (song in itunesTop) {
+                if (results.size >= 10) break
+                val already = results.any { normalizeForMatch(it.title) == normalizeForMatch(song.title) }
+                if (!already) {
+                    results.add(song)
+                }
+            }
+        } catch (_: Exception) { }
+
+        if (results.isNotEmpty()) {
+            return@withContext results.take(10)
+        }
+
+        searchSongs(trimmed).take(10)
+    }
+
+    private fun parseMusicListItem(item: JSONObject, defaultArtist: String): YoutubeSearchResult? {
+        val videoId = extractVideoIdFromMusicItem(item) ?: return null
+        val title = extractTextFromFlexColumn(item, 0) ?: return null
+        val (artist, durationSec) = extractArtistAndDuration(item)
+        val thumbUrl = extractThumbnailUrl(item)
+        return YoutubeSearchResult(
+            videoId = videoId,
+            title = title,
+            artist = if (artist.isBlank() || artist == "Desconocido") defaultArtist else artist,
+            durationSec = durationSec,
+            thumbnailUrl = thumbUrl
+        )
+    }
+
     private fun executeMusicSearch(query: String, withSongsFilter: Boolean): List<YoutubeSearchResult> {
         return try {
             val endpoint = "https://music.youtube.com/youtubei/v1/search"
@@ -570,6 +849,23 @@ object YoutubeRepository {
             } else if (artist.isEmpty()) {
                 // El primer texto que no es separador es el artista
                 artist = text
+            }
+        }
+
+        // Si la duración no vino en flexColumns, revisar fixedColumns (listas y álbumes)
+        if (durationSec == 0.0) {
+            val fixedCols = item.optJSONArray("fixedColumns")
+            if (fixedCols != null && fixedCols.length() > 0) {
+                val fRuns = fixedCols.getJSONObject(0)
+                    .optJSONObject("musicResponsiveListItemFixedColumnRenderer")
+                    ?.optJSONObject("text")
+                    ?.optJSONArray("runs")
+                if (fRuns != null && fRuns.length() > 0) {
+                    val timeStr = fRuns.getJSONObject(0).optString("text").trim()
+                    if (timeStr.contains(":") && timeStr.all { it.isDigit() || it == ':' }) {
+                        durationSec = parseDurationToSeconds(timeStr)
+                    }
+                }
             }
         }
 

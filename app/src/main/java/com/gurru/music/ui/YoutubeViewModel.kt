@@ -3,6 +3,7 @@ package com.gurru.music.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.gurru.music.data.ArtistCardData
 import com.gurru.music.data.TrackOrigin
 import com.gurru.music.data.YoutubeRepository
 import com.gurru.music.data.normalizeForMatch
@@ -41,8 +42,11 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
     private val _recents = MutableStateFlow<List<YoutubeSearchResult>>(emptyList())
     val recents: StateFlow<List<YoutubeSearchResult>> = _recents.asStateFlow()
 
-    /* Artista sugerido para la tarjeta "Ver artista" (Fase 4): el artista
-       de los resultados de búsqueda. */
+    /* Tarjeta del artista oficial para la búsqueda */
+    private val _artistCard = MutableStateFlow<ArtistCardData?>(null)
+    val artistCard: StateFlow<ArtistCardData?> = _artistCard.asStateFlow()
+
+    /* Compatibilidad para nombre del artista sugerido */
     private val _suggestedArtist = MutableStateFlow<String?>(null)
     val suggestedArtist: StateFlow<String?> = _suggestedArtist.asStateFlow()
 
@@ -58,17 +62,25 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
             _query.value   = q
             _results.value = r
             _recents.value = YoutubeRepository.getRecents()
-            _suggestedArtist.value = computeSuggestedArtist(r, q)
+            val card = if (q.isNotBlank()) withContext(Dispatchers.IO) {
+                YoutubeRepository.getArtistInfo(q)
+            } ?: computeSuggestedArtistCard(r, q) else null
+            _artistCard.value = card
+            _suggestedArtist.value = card?.name
         }
 
-        // Observar cambios de canción: lanzar radio y precargar siguiente
+        // Observar cambios de canción: lanzar radio solo si es una sola canción o cerca del final de la cola
         viewModelScope.launch {
             var lastYtId: String? = null
             PlayerManager.currentTrack.collect { track ->
                 if (track?.origin == TrackOrigin.YOUTUBE && track.youtubeId != null) {
                     if (track.youtubeId != lastYtId) {
                         lastYtId = track.youtubeId
-                        startRadio(track.youtubeId)
+                        val qSize = PlayerManager.queue.value.size
+                        val curIdx = PlayerManager.currentIndex.value
+                        if (qSize <= 1 || curIdx >= qSize - 2) {
+                            startRadio(track.youtubeId)
+                        }
                     }
                 }
             }
@@ -83,6 +95,7 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
         // no queden resultados viejos con el buscador vacío
         if (q.isBlank()) {
             _results.value = emptyList()
+            _artistCard.value = null
             _suggestedArtist.value = null
         }
     }
@@ -93,8 +106,11 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch(Dispatchers.IO) {
             _searching.value = true
             try {
-                _results.value = YoutubeRepository.search(q)
-                _suggestedArtist.value = computeSuggestedArtist(_results.value, q)
+                val results = YoutubeRepository.search(q)
+                val card = YoutubeRepository.getArtistInfo(q) ?: computeSuggestedArtistCard(results, q)
+                _results.value = results
+                _artistCard.value = card
+                _suggestedArtist.value = card?.name
             }
             catch (_: Exception) { /* mantener resultados anteriores si falla la red */ }
             finally { _searching.value = false }
@@ -150,10 +166,21 @@ class YoutubeViewModel(application: Application) : AndroidViewModel(application)
     fun clearSearch() {
         _query.value = ""
         _results.value = emptyList()
+        _artistCard.value = null
         _suggestedArtist.value = null
         viewModelScope.launch(Dispatchers.IO) {
             YoutubeRepository.clearLastSearch()
         }
+    }
+
+    private fun computeSuggestedArtistCard(results: List<YoutubeSearchResult>, query: String): ArtistCardData? {
+        val name = computeSuggestedArtist(results, query) ?: return null
+        val thumb = results.firstOrNull { it.artist == name }?.thumbnailUrl
+        return ArtistCardData(
+            name = name,
+            imageUrl = thumb,
+            subtitle = "Artista · Ver canciones y álbumes"
+        )
     }
 
     /* Artista sugerido para la tarjeta "Ver artista": el artista de los

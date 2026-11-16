@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -64,6 +66,7 @@ fun ArtistScreen(
 ) {
     val theme = LocalGurruTheme.current
     val name by artistViewModel.artistName.collectAsState()
+    val artistCard by artistViewModel.artistCard.collectAsState()
     val loading by artistViewModel.loading.collectAsState()
     val topSongs by artistViewModel.topSongs.collectAsState()
     val albums by artistViewModel.albums.collectAsState()
@@ -100,7 +103,7 @@ fun ArtistScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
 
-            // ── Cabecera: atrás + nombre del artista ─────────────────────
+            // ── Cabecera: atrás + foto y nombre del artista ──────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -118,15 +121,37 @@ fun ArtistScreen(
                         modifier = Modifier.size(26.dp)
                     )
                 }
-                Text(
-                    text = name.ifBlank { artistName },
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
+                if (selectedAlbum == null && !artistCard?.imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = artistCard?.imageUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .border(1.5.dp, theme.accent, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (selectedAlbum != null) selectedAlbum!!.name else name.ifBlank { artistName },
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (selectedAlbum == null && !artistCard?.subtitle.isNullOrBlank()) {
+                        Text(
+                            text = artistCard?.subtitle ?: "",
+                            fontSize = 11.5.sp,
+                            color = theme.soft,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -151,7 +176,7 @@ fun ArtistScreen(
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "Cargando artista…",
+                            text = "Cargando canciones y álbumes…",
                             color = theme.soft,
                             fontSize = 14.sp
                         )
@@ -163,8 +188,13 @@ fun ArtistScreen(
                     album = selectedAlbum!!,
                     tracks = albumTracks,
                     loading = loadingAlbum,
-                    onPlay = { result ->
-                        youtubeViewModel.play(result, fromSearch = false, onOpenPlayer = onOpenPlayer)
+                    onPlayTrack = { index ->
+                        artistViewModel.playAlbumTrack(
+                            album = selectedAlbum!!,
+                            albumTracks = albumTracks,
+                            selectedIndex = index,
+                            onOpenPlayer = onOpenPlayer
+                        )
                     },
                     onDownload = downloadsViewModel?.let { vm -> { r -> vm.startDownload(r) } },
                     activeDownloads = activeDownloads,
@@ -187,7 +217,7 @@ fun ArtistScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Top 10",
+                                    text = "Top 10 más escuchadas",
                                     color = theme.soft,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
@@ -214,11 +244,23 @@ fun ArtistScreen(
                                 }
                             }
                         }
-                        items(topSongs, key = { it.videoId }) { result ->
+                        itemsIndexed(topSongs, key = { _, it -> it.videoId }) { index, result ->
                             YoutubeTrackRow(
                                 result = result,
                                 onClick = {
-                                    youtubeViewModel.play(result, fromSearch = false, onOpenPlayer = onOpenPlayer)
+                                    artistViewModel.playAlbumTrack(
+                                        album = ArtistAlbum(
+                                            collectionId = 0L,
+                                            name = "Top 10 - ${name.ifBlank { artistName }}",
+                                            artistName = name.ifBlank { artistName },
+                                            artworkUrl = artistCard?.imageUrl,
+                                            year = 0,
+                                            trackCount = topSongs.size
+                                        ),
+                                        albumTracks = topSongs,
+                                        selectedIndex = index,
+                                        onOpenPlayer = onOpenPlayer
+                                    )
                                 },
                                 onDownload = downloadsViewModel?.let { vm -> { vm.startDownload(result) } },
                                 downloadProgress = activeDownloads[result.videoId],
@@ -287,7 +329,7 @@ private fun AlbumTracksList(
     album: ArtistAlbum,
     tracks: List<com.gurru.music.data.YoutubeSearchResult>,
     loading: Boolean,
-    onPlay: (com.gurru.music.data.YoutubeSearchResult) -> Unit,
+    onPlayTrack: (Int) -> Unit,
     onDownload: ((com.gurru.music.data.YoutubeSearchResult) -> Unit)?,
     activeDownloads: Map<String, Int>,
     completedIds: Set<String>
@@ -336,6 +378,31 @@ private fun AlbumTracksList(
                         fontSize = 13.sp,
                         color = theme.soft
                     )
+                    if (tracks.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(theme.accent.copy(alpha = 0.15f))
+                                .clickable { onPlayTrack(0) }
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = theme.accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Reproducir álbum",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = theme.accent
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -371,10 +438,10 @@ private fun AlbumTracksList(
                 }
             }
         } else {
-            items(tracks, key = { it.videoId }) { result ->
+            itemsIndexed(tracks, key = { _, it -> it.videoId }) { index, result ->
                 YoutubeTrackRow(
                     result = result,
-                    onClick = { onPlay(result) },
+                    onClick = { onPlayTrack(index) },
                     onDownload = onDownload?.let { dl -> { dl(result) } },
                     downloadProgress = activeDownloads[result.videoId],
                     isDownloaded = completedIds.contains(result.videoId)

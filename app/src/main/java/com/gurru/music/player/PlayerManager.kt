@@ -10,6 +10,8 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.gurru.music.data.Track
+import com.gurru.music.data.TrackOrigin
+import com.gurru.music.data.YoutubeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /* Modo de repetición (ciclo: apagado -> todo -> una -> apagado). */
 enum class RepeatMode { OFF, ALL, ONE }
@@ -129,17 +132,62 @@ object PlayerManager {
         _queue.value = _queue.value + tracks
     }
 
-    /* Carga UNA sola canción en el reproductor y la pone a sonar. */
+    /* Carga UNA sola canción en el reproductor y la pone a sonar.
+       Si es una canción de YouTube que todavía no tiene resuelta su URL de audio (proviene de un álbum o cola),
+       obtiene la URL de stream de forma asíncrona antes de preparar ExoPlayer. */
     private fun loadAt(index: Int) {
-        val track = _queue.value[index]
-        player.setMediaItem(track.toMediaItem())
-        player.prepare()
+        val q = _queue.value
+        if (index !in q.indices) return
+        val track = q[index]
+
         _currentIndex.value = index
         _currentTrack.value = track
         _durationMs.value = (track.durationSec * 1000).toLong()
         _positionMs.value = 0L
+
+        if (track.origin == TrackOrigin.YOUTUBE && track.audioUri.isBlank() && track.youtubeId != null) {
+            scope.launch {
+                try {
+                    val streamUrl = withContext(Dispatchers.IO) {
+                        YoutubeRepository.getStreamUrl(track.youtubeId)
+                    }
+                    val updated = track.copy(audioUri = streamUrl)
+                    val newQueue = _queue.value.toMutableList()
+                    if (index in newQueue.indices) {
+                        newQueue[index] = updated
+                        _queue.value = newQueue
+                    }
+                    if (_currentIndex.value == index) {
+                        _currentTrack.value = updated
+                        player.setMediaItem(updated.toMediaItem())
+                        player.prepare()
+                        startServiceIfNeeded()
+                        player.play()
+                    }
+                    val nextTrack = _queue.value.getOrNull(index + 1)
+                    if (nextTrack?.origin == TrackOrigin.YOUTUBE && nextTrack.youtubeId != null) {
+                        launch(Dispatchers.IO) {
+                            try { YoutubeRepository.prefetch(nextTrack.youtubeId) } catch (_: Exception) {}
+                        }
+                    }
+                } catch (e: Exception) {
+                    next()
+                }
+            }
+            return
+        }
+
+        player.setMediaItem(track.toMediaItem())
+        player.prepare()
         startServiceIfNeeded()
         player.play()
+
+        val nextTrack = q.getOrNull(index + 1)
+        if (nextTrack?.origin == TrackOrigin.YOUTUBE && nextTrack.youtubeId != null) {
+            scope.launch(Dispatchers.IO) {
+                try { YoutubeRepository.prefetch(nextTrack.youtubeId) } catch (_: Exception) {}
+            }
+        }
     }
 
     fun togglePlay() {

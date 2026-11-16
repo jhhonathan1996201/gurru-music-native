@@ -41,19 +41,54 @@ data class ArtistAlbum(
      buscando "<artista> <canción>" (como en la app de Capacitor). */
 object ArtistRepository {
 
-    /* Top 10 del artista: busca sus canciones en YouTube Music y se queda
-       solo con las que son del artista pedido (nombre del artista
-       verificado, sin importar el canal que subió el video). */
+    /* Top 10 oficial del artista: obtiene las canciones más escuchadas de YouTube Music
+       (emisora algorítmica y estantería de canciones más escuchadas) y complementa con iTunes. */
     suspend fun getTopSongs(artistName: String): List<YoutubeSearchResult> = withContext(Dispatchers.IO) {
         val name = artistName.trim()
         if (name.isEmpty()) return@withContext emptyList()
-        val results = YoutubeRepository.searchSongs(name)
-        val normName = normalizeForMatch(name)
-        val verified = results.filter { r ->
-            val a = normalizeForMatch(r.artist)
-            a.isNotBlank() && (a == normName || a.contains(normName) || normName.contains(a))
+        YoutubeRepository.getArtistTopSongs(name)
+    }
+
+    /* Datos oficiales del artista (foto HD, oyentes mensuales/suscriptores, browseId). */
+    suspend fun getArtistCard(artistName: String): ArtistCardData? = withContext(Dispatchers.IO) {
+        val name = artistName.trim()
+        if (name.isEmpty()) return@withContext null
+        YoutubeRepository.getArtistInfo(name)
+    }
+
+    /* Obtiene el top de canciones de iTunes (ordenadas por popularidad) y resuelve
+       cada una en YouTube Music para tener su videoId y stream directo. */
+    suspend fun getTopSongsFromItunes(artistName: String): List<YoutubeSearchResult> = withContext(Dispatchers.IO) {
+        val name = artistName.trim()
+        if (name.isEmpty()) return@withContext emptyList()
+        val titles = try {
+            val term = URLEncoder.encode(name, "UTF-8")
+            val urlStr = "https://itunes.apple.com/search?term=$term&entity=song&limit=15&country=US&lang=es"
+            val json = JSONObject(getHttp(urlStr))
+            val arr = json.optJSONArray("results") ?: return@withContext emptyList()
+            val normName = normalizeForMatch(name)
+            val list = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val artist = o.optString("artistName", "")
+                val a = normalizeForMatch(artist)
+                if (a.isBlank()) continue
+                if (a != normName && !a.contains(normName) && !normName.contains(a)) continue
+                val t = o.optString("trackName", "").trim()
+                if (t.isNotBlank() && !list.contains(t)) list.add(t)
+            }
+            list.take(10)
+        } catch (_: Exception) {
+            emptyList()
         }
-        verified.take(10)
+
+        if (titles.isEmpty()) return@withContext emptyList()
+        coroutineScope {
+            val jobs = titles.map { title ->
+                async { resolveAlbumTrack(title, name) }
+            }
+            jobs.awaitAll().filterNotNull()
+        }
     }
 
     /* Álbumes del artista desde iTunes Search API (sin llave).

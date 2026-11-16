@@ -4,7 +4,10 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gurru.music.data.ArtistAlbum
+import com.gurru.music.data.ArtistCardData
 import com.gurru.music.data.ArtistRepository
+import com.gurru.music.data.Track
+import com.gurru.music.data.TrackOrigin
 import com.gurru.music.data.YoutubeRepository
 import com.gurru.music.data.YoutubeSearchResult
 import com.gurru.music.player.PlayerManager
@@ -25,6 +28,9 @@ class ArtistViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _artistName = MutableStateFlow("")
     val artistName: StateFlow<String> = _artistName.asStateFlow()
+
+    private val _artistCard = MutableStateFlow<ArtistCardData?>(null)
+    val artistCard: StateFlow<ArtistCardData?> = _artistCard.asStateFlow()
 
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
@@ -47,13 +53,10 @@ class ArtistViewModel(application: Application) : AndroidViewModel(application) 
     private var loadedArtist = ""
 
     init {
-        // YoutubeRepository ya se inicializa en YoutubeViewModel, pero por
-        // si esta pantalla se abre primero, asegurarse de que esté listo.
         YoutubeRepository.init(application)
     }
 
-    /* Carga el top 10 y los álbumes del artista. Si ya se cargó este
-       mismo artista y tiene canciones, no vuelve a cargar. */
+    /* Carga el top 10, los álbumes y la información del artista. */
     fun load(artist: String) {
         val name = artist.trim()
         if (name.isEmpty()) return
@@ -65,6 +68,8 @@ class ArtistViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             _loading.value = true
             try {
+                val card = ArtistRepository.getArtistCard(name)
+                _artistCard.value = card
                 val songs = ArtistRepository.getTopSongs(name)
                 val albums = ArtistRepository.getAlbums(name)
                 _topSongs.value = songs
@@ -93,27 +98,105 @@ class ArtistViewModel(application: Application) : AndroidViewModel(application) 
         _albumTracks.value = emptyList()
     }
 
-    /* Reproduce todo el top 10: resuelve las URLs en paralelo y pone
-       la cola en el reproductor. Las URLs se resuelven en IO y
-       PlayerManager se llama en Main, como en YoutubeViewModel. */
+    /* Reproduce una canción de un álbum y carga TODO el álbum en la cola
+       "A continuación" del reproductor. La canción seleccionada empieza de inmediato
+       y las demás canciones del álbum quedan en la cola listas para reproducirse. */
+    fun playAlbumTrack(
+        album: ArtistAlbum,
+        albumTracks: List<YoutubeSearchResult>,
+        selectedIndex: Int,
+        onOpenPlayer: () -> Unit
+    ) {
+        if (albumTracks.isEmpty() || selectedIndex !in albumTracks.indices) return
+        viewModelScope.launch {
+            try {
+                // 1. Crear la lista completa de Tracks para la cola
+                val fullQueue = albumTracks.mapIndexed { _, res ->
+                    Track(
+                        id = "youtube-${res.videoId}",
+                        title = res.title,
+                        artist = if (res.artist.isNotBlank() && res.artist != "Desconocido") res.artist else album.artistName,
+                        album = album.name,
+                        durationSec = res.durationSec,
+                        artUri = res.thumbnailUrl ?: album.artworkUrl,
+                        audioUri = "", // Se resuelve al reproducir
+                        folder = "",
+                        origin = TrackOrigin.YOUTUBE,
+                        youtubeId = res.videoId
+                    )
+                }
+
+                // 2. Extraer URL de la canción seleccionada para arrancar al instante
+                val targetRes = albumTracks[selectedIndex]
+                val streamUrl = withContext(Dispatchers.IO) {
+                    YoutubeRepository.getStreamUrl(targetRes.videoId)
+                }
+                val readyQueue = fullQueue.toMutableList().also {
+                    it[selectedIndex] = it[selectedIndex].copy(audioUri = streamUrl)
+                }
+
+                // 3. Pasar toda la cola a PlayerManager y abrir el reproductor
+                PlayerManager.playQueue(readyQueue, selectedIndex)
+                onOpenPlayer()
+
+                // 4. Precargar en background las siguientes canciones del álbum
+                withContext(Dispatchers.IO) {
+                    val nextIndices = (selectedIndex + 1 until minOf(selectedIndex + 4, albumTracks.size))
+                    for (i in nextIndices) {
+                        try {
+                            YoutubeRepository.prefetch(albumTracks[i].videoId)
+                        } catch (_: Exception) { }
+                    }
+                }
+            } catch (_: Exception) {
+                // Fallback: reproducir al menos la canción pulsada
+                try {
+                    val targetRes = albumTracks[selectedIndex]
+                    val url = withContext(Dispatchers.IO) {
+                        YoutubeRepository.getStreamUrl(targetRes.videoId)
+                    }
+                    PlayerManager.playQueue(listOf(targetRes.toTrack(url)), 0)
+                    onOpenPlayer()
+                } catch (_: Exception) { }
+            }
+        }
+    }
+
+    /* Reproduce todo el top 10: carga las 10 canciones en la cola y pone
+       a sonar la primera al instante sin esperar a resolver todas. */
     fun playAll(onOpenPlayer: () -> Unit) {
         val songs = _topSongs.value
         if (songs.isEmpty()) return
         viewModelScope.launch {
             try {
-                val tracks = withContext(Dispatchers.IO) {
-                    songs.map { result ->
-                        async {
-                            try {
-                                val url = YoutubeRepository.getStreamUrl(result.videoId)
-                                result.toTrack(url)
-                            } catch (_: Exception) { null }
-                        }
-                    }.awaitAll().filterNotNull()
+                val fullQueue = songs.map { res ->
+                    Track(
+                        id = "youtube-${res.videoId}",
+                        title = res.title,
+                        artist = res.artist.ifBlank { _artistName.value },
+                        album = "",
+                        durationSec = res.durationSec,
+                        artUri = res.thumbnailUrl,
+                        audioUri = "",
+                        folder = "",
+                        origin = TrackOrigin.YOUTUBE,
+                        youtubeId = res.videoId
+                    )
                 }
-                if (tracks.isNotEmpty()) {
-                    PlayerManager.playQueue(tracks, 0)
-                    onOpenPlayer()
+                val firstUrl = withContext(Dispatchers.IO) {
+                    YoutubeRepository.getStreamUrl(songs[0].videoId)
+                }
+                val readyQueue = fullQueue.toMutableList().also {
+                    it[0] = it[0].copy(audioUri = firstUrl)
+                }
+                PlayerManager.playQueue(readyQueue, 0)
+                onOpenPlayer()
+
+                // Precargar la segunda
+                if (songs.size > 1) {
+                    withContext(Dispatchers.IO) {
+                        try { YoutubeRepository.prefetch(songs[1].videoId) } catch (_: Exception) {}
+                    }
                 }
             } catch (_: Exception) { }
         }

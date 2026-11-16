@@ -24,3 +24,11 @@ data class YoutubeSearchResult(
         youtubeId   = videoId
     )
 }
+
+/* Información del artista para la tarjeta de búsqueda y la cabecera de la página de artista. */
+data class ArtistCardData(
+    val name: String,
+    val imageUrl: String? = null,
+    val subtitle: String? = null,
+    val browseId: String? = null
+)

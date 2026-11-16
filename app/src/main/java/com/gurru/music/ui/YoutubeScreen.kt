@@ -18,10 +18,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -74,6 +76,7 @@ fun YoutubeScreen(
     val theme       = LocalGurruTheme.current
     val query       by viewModel.query.collectAsState()
     val results     by viewModel.results.collectAsState()
+    val artistCard  by viewModel.artistCard.collectAsState()
     val suggestedArtist by viewModel.suggestedArtist.collectAsState()
     val searching   by viewModel.searching.collectAsState()
     val prepState   by viewModel.prepareState.collectAsState()
@@ -178,11 +181,12 @@ fun YoutubeScreen(
                 // ── Resultados de búsqueda ──────────────────────────────
                 // Tarjeta del artista (Fase 4): arriba de las canciones
                 // cuando la búsqueda es de un artista. Tocar abre su página.
-                if (results.isNotEmpty() && suggestedArtist != null) {
+                if (results.isNotEmpty() && (artistCard != null || suggestedArtist != null)) {
+                    val card = artistCard ?: com.gurru.music.data.ArtistCardData(name = suggestedArtist!!)
                     item {
                         ArtistCard(
-                            artistName = suggestedArtist!!,
-                            onClick = { onOpenArtist(suggestedArtist!!) }
+                            artist = card,
+                            onClick = { onOpenArtist(card.name) }
                         )
                     }
                 }
@@ -467,68 +471,110 @@ fun YoutubeTrackRow(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/* Tarjeta del artista (Fase 4): aparece arriba de los resultados
-   cuando la búsqueda es de un artista. Muestra el nombre del artista
-   (del campo artista de los resultados, no de una canción) y abre su
-   página al tocarla. */
+/* Tarjeta del artista: aparece arriba de los resultados cuando la búsqueda
+   coincide con un artista. Muestra su foto oficial HD, nombre, oyentes/subtítulo
+   y un botón estilizado para ver su Top 10 y discografía. */
 @Composable
 private fun ArtistCard(
-    artistName: String,
+    artist: com.gurru.music.data.ArtistCardData,
     onClick: () -> Unit
 ) {
     val theme = LocalGurruTheme.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .padding(vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
             .background(GurruRowBackground)
-            .border(1.dp, theme.accent.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .border(1.5.dp, theme.accent.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
             .clickable { onClick() }
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(26.dp))
-                .background(theme.accent.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = null,
-                tint = theme.accent,
-                modifier = Modifier.size(30.dp)
+        // Foto circular del artista
+        if (!artist.imageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = artist.imageUrl,
+                contentDescription = artist.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(62.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, theme.accent, CircleShape)
+                    .background(theme.accent.copy(alpha = 0.15f))
             )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(62.dp)
+                    .clip(CircleShape)
+                    .background(theme.accent.copy(alpha = 0.2f))
+                    .border(1.5.dp, theme.accent.copy(alpha = 0.6f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = null,
+                    tint = theme.accent,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
         }
+
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 12.dp)
+                .padding(start = 14.dp, end = 8.dp)
         ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(theme.accent.copy(alpha = 0.18f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "ARTISTA",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = theme.accent,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
-                text = artistName,
-                fontSize = 16.sp,
+                text = artist.name,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "Artista · Ver top 10 y álbumes",
+                text = artist.subtitle ?: "Ver canciones más escuchadas y álbumes",
                 fontSize = 12.5.sp,
                 color = theme.soft,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Text(
-            text = "Ver artista",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = theme.accent
-        )
+
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(theme.accent.copy(alpha = 0.14f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowForward,
+                contentDescription = "Ver artista",
+                tint = theme.accent,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
 }
 
